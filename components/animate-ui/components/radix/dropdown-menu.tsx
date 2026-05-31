@@ -34,7 +34,11 @@ import {
   type DropdownMenuTriggerProps as DropdownMenuTriggerPrimitiveProps,
 } from '@/components/animate-ui/primitives/radix/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
+import {
+  Check as CheckIcon,
+  ChevronRight as ChevronRightIcon,
+  Circle as CircleIcon,
+} from '@gravity-ui/icons';
 
 type DropdownMenuProps = DropdownMenuPrimitiveProps;
 

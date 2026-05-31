@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import {
   Breadcrumb,
@@ -13,6 +13,9 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ThemeTogglerButton } from '@/components/animate-ui/components/buttons/theme-toggler';
 import {
   SidebarProvider,
   SidebarInset,
@@ -48,35 +51,32 @@ import {
   DropdownMenuTrigger,
 } from '@/components/animate-ui/components/radix/dropdown-menu';
 import {
-  AudioWaveform,
-  BadgeCheck,
+  ArrowDownToLine as Download,
+  ArrowRight as Forward,
+  ArrowRightFromSquare as LogOut,
+  ArrowUpFromLine as Upload,
+  ChartPie as PieChart,
+  ChartPie as PieChartIcon,
   Bell,
-  BookOpen,
-  Bot,
+  ChevronDown,
   ChevronRight,
-  ChevronsUpDown,
-  Coins,
-  CoinsIcon,
-  Command,
-  CreditCard,
+  CircleDollar as CoinsIcon,
+  Ellipsis as MoreHorizontal,
+  FaceRobot as Bot,
   Folder,
-  Forward,
-  Frame,
-  GalleryVerticalEnd,
-  LogOut,
-  Map,
-  MoreHorizontal,
-  PieChart,
-  PieChartIcon,
+  Gear as Settings2,
+  LayoutCells as Frame,
+  Magnifier as Search,
+  MapPin as Map,
+  Person as User,
   Plus,
-  Settings2,
-  ShieldCogCorner,
+  Route as Waypoints,
+  SealCheck as BadgeCheck,
+  ShieldKeyhole as ShieldCogCorner,
   Sparkles,
-  SquareTerminal,
-  Trash2,
-  User,
-  Waypoints,
-} from 'lucide-react';
+  TrashBin as Trash2,
+  CreditCard,
+} from '@gravity-ui/icons';
 import {
   Avatar,
   AvatarFallback,
@@ -98,12 +98,12 @@ const DATA = {
       plan: 'AN System',
     },
     {
-      name: 'Billing',
+      name: 'Account / Billing',
       logo: CoinsIcon,
       plan: 'AN System',
     },
     {
-      name: 'Admin',
+      name: 'Administrator',
       logo: ShieldCogCorner,
       plan: 'AN System',
     },
@@ -131,8 +131,13 @@ const DATA = {
       icon: User,
     },
     {
+      title: 'Installations',
+      url: '/main/installations',
+      icon: Settings2,
+    },
+    {
       title: 'Job Order',
-      url: '/joborder',
+      url: '/main/job-orders',
       icon: Bot,
     }
   ],
@@ -162,7 +167,88 @@ interface RadixSidebarDemoProps {
 export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
   const isMobile = useIsMobile();
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTeam, setActiveTeam] = React.useState(DATA.teams[0]);
+  const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
+  const subscriberSearchRef = React.useRef<HTMLInputElement>(null);
+  const activeNavItem = DATA.navMain.find((item) => pathname === item.url);
+  const breadcrumbPage = activeNavItem?.title ?? 'Overview';
+  const isSubscribersPage = pathname === '/main/subscribers';
+  const isInstallationsPage = pathname === '/main/installations';
+  const isJobOrdersPage = pathname === '/main/job-orders';
+  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage;
+  const subscriberSearch = searchParams.get('q') ?? '';
+  const searchPlaceholder = isJobOrdersPage
+    ? 'Search job orders'
+    : isInstallationsPage
+      ? 'Search installations'
+      : 'Search subscribers';
+  const addButtonLabel = isJobOrdersPage
+    ? 'Add Job Order'
+    : isInstallationsPage
+      ? 'Add Installation'
+      : 'Add Subscriber';
+
+  const updateSubscriberSearch = React.useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      if (value) {
+        params.set('q', value);
+      } else {
+        params.delete('q');
+      }
+
+      const queryString = params.toString();
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+        scroll: false,
+      });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const handleAddClick = React.useCallback(() => {
+    if (!isJobOrdersPage) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.set('create', '1');
+    router.replace(`${pathname}?${params.toString()}`, {
+      scroll: false,
+    });
+  }, [isJobOrdersPage, pathname, router, searchParams]);
+
+  const expandSearch = React.useCallback(() => {
+    setIsSearchExpanded(true);
+    window.requestAnimationFrame(() => subscriberSearchRef.current?.focus());
+  }, []);
+
+  React.useEffect(() => {
+    if (!isTablePage) return;
+
+    const handleSearchShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (event.key !== '/' || isEditableTarget || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      event.preventDefault();
+      expandSearch();
+    };
+
+    window.addEventListener('keydown', handleSearchShortcut);
+    return () => window.removeEventListener('keydown', handleSearchShortcut);
+  }, [expandSearch, isTablePage]);
+
+  React.useEffect(() => {
+    setIsSearchExpanded(false);
+  }, [pathname]);
 
   if (!activeTeam) return null;
 
@@ -177,7 +263,7 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="group/team-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-600 text-sidebar-primary-foreground">
                       <activeTeam.logo className="size-4" />
@@ -186,11 +272,8 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                       <span className="truncate font-semibold">
                         {activeTeam.name}
                       </span>
-                      <span className="truncate text-xs">
-                        {activeTeam.plan}
-                      </span>
                     </div>
-                    <ChevronsUpDown className="ml-auto" />
+                    <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/team-trigger:rotate-180" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -234,7 +317,6 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
         <SidebarContent>
           {/* Nav Main */}
           <SidebarGroup>
-            <SidebarGroupLabel>Main</SidebarGroupLabel>
             <SidebarMenu>
               {DATA.navMain.map((item) => {
                 const isActive = pathname === item.url;
@@ -345,7 +427,7 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="group/user-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage
@@ -362,7 +444,7 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                         {DATA.user.email}
                       </span>
                     </div>
-                    <ChevronsUpDown className="ml-auto size-4" />
+                    <ChevronDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/user-trigger:rotate-180" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -415,6 +497,20 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="justify-between"
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    <span>Theme</span>
+                    <ThemeTogglerButton
+                      variant="ghost"
+                      size="xs"
+                      direction="ltr"
+                      modes={['light', 'dark', 'system']}
+                      className="-mr-1"
+                    />
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem>
                     <LogOut />
                     Log out
@@ -428,27 +524,78 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+      <SidebarInset className="min-w-0 overflow-x-hidden">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <div className="flex min-w-0 items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4 my-auto" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Building Your Application
+                  <BreadcrumbLink href="/main/overview">
+                    {activeTeam.name}
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
+                  <BreadcrumbPage>{breadcrumbPage}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          {isTablePage && (
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+              {isSearchExpanded || subscriberSearch ? (
+                <div className="relative w-44 sm:w-64">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    ref={subscriberSearchRef}
+                    type="search"
+                    placeholder={searchPlaceholder}
+                    value={subscriberSearch}
+                    onChange={(event) => updateSubscriberSearch(event.target.value)}
+                    className="h-8 border-transparent bg-background/40 pl-8 pr-7 text-sm shadow-none hover:bg-muted/50 focus-visible:bg-background dark:bg-transparent dark:hover:bg-muted/40 dark:focus-visible:bg-background"
+                    aria-label={searchPlaceholder}
+                  />
+                  <kbd className="pointer-events-none absolute right-1.5 top-1/2 hidden h-4 min-w-4 -translate-y-1/2 items-center justify-center rounded border bg-muted px-1 text-[9px] font-medium text-muted-foreground sm:flex">
+                    /
+                  </kbd>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={expandSearch}
+                  aria-label={searchPlaceholder}
+                >
+                  <Search />
+                </Button>
+              )}
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button type="button" variant="ghost" size="sm">
+                  <Upload data-icon="inline-start" />
+                  <span className="hidden sm:inline">Import</span>
+                </Button>
+                <Button type="button" variant="ghost" size="sm">
+                  <Download data-icon="inline-start" />
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary"
+                  onClick={handleAddClick}
+                >
+                  <Plus data-icon="inline-start" />
+                  <span className="hidden sm:inline">{addButtonLabel}</span>
+                </Button>
+              </div>
+            </div>
+          )}
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden p-4 pt-0">
           {children}
         </div>
       </SidebarInset>

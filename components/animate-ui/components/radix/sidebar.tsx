@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Slot } from 'radix-ui';
 import { cva, VariantProps } from 'class-variance-authority';
-import { PanelLeftIcon } from 'lucide-react';
+import { LayoutSideContentLeft as PanelLeftIcon } from '@gravity-ui/icons';
 import { type Transition } from 'motion/react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -532,13 +532,13 @@ function SidebarMenuItem({ className, ...props }: SidebarMenuItemProps) {
 }
 
 const sidebarMenuButtonActiveVariants = cva(
-  'bg-sidebar-accent text-sidebar-accent-foreground rounded-md',
+  'relative rounded-md bg-sidebar-accent text-sidebar-accent-foreground',
   {
     variants: {
       variant: {
         default: 'bg-sidebar-accent text-sidebar-accent-foreground',
         outline:
-          'bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
+          'bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_0_0_1px_var(--sidebar-accent)]',
       },
     },
     defaultVariants: {
@@ -558,9 +558,9 @@ const sidebarMenuButtonVariants = cva(
           'bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] [&:not([data-highlight])]:hover:bg-sidebar-accent [&:not([data-highlight])]:hover:text-sidebar-accent-foreground [&:not([data-highlight])]:hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
       },
       size: {
-        default: 'h-8 text-sm',
-        sm: 'h-7 text-xs',
-        lg: 'h-12 text-sm group-data-[collapsible=icon]:p-0!',
+        default: 'h-9 text-sm',
+        sm: 'h-8 text-xs',
+        lg: 'h-13 text-sm group-data-[collapsible=icon]:p-0!',
       },
     },
     defaultVariants: {
@@ -762,7 +762,7 @@ function SidebarMenuSubButton({
   const Comp = asChild ? Slot.Root : 'a';
 
   return (
-    <HighlightItem activeClassName="bg-sidebar-accent text-sidebar-accent-foreground rounded-md">
+    <HighlightItem activeClassName="rounded-md bg-sidebar-accent text-sidebar-accent-foreground">
       <Comp
         data-slot="sidebar-menu-sub-button"
         data-sidebar="menu-sub-button"

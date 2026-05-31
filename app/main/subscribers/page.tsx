@@ -1,12 +1,12 @@
 'use client';
 
-import DataTableWithExpandableRowsDemo from '@/components/shadcn-studio/data-table/data-table-09';
+import SubscribersDataTable from '@/components/shadcn-studio/data-table/subscribers/data-table';
 
 export default function SubscribersPage() {
   return (
-    <div className="w-full">
+    <div className="min-w-0 w-full">
 
-      <DataTableWithExpandableRowsDemo />
+      <SubscribersDataTable />
     </div>
   );
 }

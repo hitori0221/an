@@ -1,8 +1,11 @@
 import * as React from "react"
 import { Slot } from "radix-ui"
+import {
+  ChevronRight as ChevronRightIcon,
+  Ellipsis as MoreHorizontalIcon,
+} from "@gravity-ui/icons"
 
 import { cn } from "@/lib/utils"
-import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
