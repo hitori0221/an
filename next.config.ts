@@ -1,10 +1,15 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
-    "http://10.0.0.190:3000",
-    "http://localhost:3000",
+    "localhost",
+    "127.0.0.1",
+    "192.168.100.22",
   ],
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
 };
 
 export default nextConfig;

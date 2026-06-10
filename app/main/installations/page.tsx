@@ -1,6 +1,6 @@
 'use client'
 
-import InstallationsDataTable from '@/components/shadcn-studio/data-table/installations/data-table'
+import InstallationsDataTable from './_components/data-table/data-table'
 
 export default function InstallationsPage() {
   return (

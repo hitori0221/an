@@ -4,6 +4,8 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
+import { logout } from '@/app/login/actions';
+import { subscriptionPlans } from '@/app/main/subscription-plans/_components/data-table/data';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -28,12 +30,12 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  SidebarMenuAction,
 } from '@/components/animate-ui/components/radix/sidebar';
 import {
   Collapsible,
@@ -46,36 +48,34 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/animate-ui/components/radix/dropdown-menu';
 import {
   ArrowDownToLine as Download,
-  ArrowRight as Forward,
   ArrowRightFromSquare as LogOut,
   ArrowUpFromLine as Upload,
-  ChartPie as PieChart,
   ChartPie as PieChartIcon,
   Bell,
   ChevronDown,
   ChevronRight,
   CircleDollar as CoinsIcon,
-  Ellipsis as MoreHorizontal,
   FaceRobot as Bot,
-  Folder,
+  Funnel,
   Gear as Settings2,
   LayoutCells as Frame,
   Magnifier as Search,
-  MapPin as Map,
   Person as User,
   Plus,
   Route as Waypoints,
   SealCheck as BadgeCheck,
   ShieldKeyhole as ShieldCogCorner,
-  Sparkles,
-  TrashBin as Trash2,
   CreditCard,
+  GearBranches,
+  Tag,
 } from '@gravity-ui/icons';
 import {
   Avatar,
@@ -84,28 +84,26 @@ import {
 } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+const subscriptionPlanCategories = Array.from(
+  new Set(subscriptionPlans.map((plan) => plan.category)),
+);
+
 const DATA = {
-  user: {
-    name: 'Skyleen',
-    email: 'skyleen@example.com',
-    avatar:
-      'https://pbs.twimg.com/profile_images/1909615404789506048/MTqvRsjo_400x400.jpg',
-  },
-  teams: [
+  workspaces: [
     {
-      name: 'Operations',
+      name: 'AN System',
       logo: Waypoints,
-      plan: 'AN System',
+      plan: 'Operations',
     },
     {
-      name: 'Account / Billing',
+      name: 'AN System',
       logo: CoinsIcon,
-      plan: 'AN System',
+      plan: 'Billing Management',
     },
     {
-      name: 'Administrator',
+      name: 'AN System',
       logo: ShieldCogCorner,
-      plan: 'AN System',
+      plan: 'Administrator',
     },
   ],
   navMain: [
@@ -141,54 +139,168 @@ const DATA = {
       icon: Bot,
     }
   ],
-  projects: [
+  billingNavMain: [
     {
-      name: 'Design Engineering',
-      url: '#',
-      icon: Frame,
+      title: 'Payments',
+      url: '/main/payments',
+      icon: CreditCard,
     },
     {
-      name: 'Sales & Marketing',
-      url: '#',
-      icon: PieChart,
+      title: 'Due Accounts',
+      url: '/main/due-accounts',
+      icon: CoinsIcon,
     },
     {
-      name: 'Travel',
-      url: '#',
-      icon: Map,
+      title: 'Collections',
+      url: '/main/collections',
+      icon: BadgeCheck,
     },
   ],
+  adminNavMain: [
+    {
+      title: 'Subscription Plans',
+      url: '/main/subscription-plans',
+      icon: Tag,
+    },
+    {
+      title: 'Manage Branch',
+      url: '/main/branches',
+      icon: GearBranches,
+    },
+  ],
+  serviceRequests: subscriptionPlanCategories.map((category) => ({
+    name: category,
+    url: `/main/service-request?category=${encodeURIComponent(category)}`,
+    icon: Frame,
+    pendingCount:
+      category === 'Internet' ? 12 : category === 'Cable' ? 4 : category === 'Combo' ? 7 : 2,
+  })),
 };
 
 interface RadixSidebarDemoProps {
   children?: React.ReactNode;
+  user: {
+    name: string;
+    email: string;
+    role: string;
+    avatar: string | null;
+  };
 }
 
-export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ElementType;
+  isActive?: boolean;
+  items?: {
+    title: string;
+    url: string;
+  }[];
+};
+
+const SUBSCRIBER_STATUS_FILTERS = ['Active', 'Inactive', 'Suspended'];
+const SUBSCRIBER_PLAN_FILTERS = ['Basic 50 Mbps', 'Fiber 100 Mbps', 'Fiber 200 Mbps', 'Fiber 300 Mbps'];
+const SUBSCRIPTION_PLAN_STATUS_FILTERS = ['Active', 'Draft', 'Archived'];
+const SUBSCRIPTION_PLAN_CATEGORY_FILTERS = subscriptionPlanCategories;
+const WORKSPACE_DEFAULT_ROUTES: Record<string, string> = {
+  Operations: '/main/overview',
+  'Billing Management': '/main/payments',
+  Administrator: '/main/subscription-plans',
+};
+
+export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [activeTeam, setActiveTeam] = React.useState(DATA.teams[0]);
+  const getWorkspaceForPath = React.useCallback((path: string) => {
+    if (DATA.billingNavMain.some((item) => path === item.url)) {
+      return DATA.workspaces[1];
+    }
+
+    if (DATA.adminNavMain.some((item) => path === item.url)) {
+      return DATA.workspaces[2];
+    }
+
+    return DATA.workspaces[0];
+  }, []);
+  const [activeWorkspace, setActiveWorkspace] = React.useState(() => getWorkspaceForPath(pathname));
   const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
   const subscriberSearchRef = React.useRef<HTMLInputElement>(null);
-  const activeNavItem = DATA.navMain.find((item) => pathname === item.url);
-  const breadcrumbPage = activeNavItem?.title ?? 'Overview';
+  const activeNavMain: NavItem[] =
+    activeWorkspace.plan === 'Billing Management'
+      ? DATA.billingNavMain
+      : activeWorkspace.plan === 'Administrator'
+        ? DATA.adminNavMain
+        : DATA.navMain;
+  const activeProjects =
+    activeWorkspace.plan === 'Operations' ? DATA.serviceRequests : [];
+  const activeNavItem = activeNavMain.find((item) => pathname === item.url);
+  const isServiceRequestPage = pathname === '/main/service-request';
+  const serviceRequestCategoryFilter = searchParams.get('category') ?? 'all';
+  const breadcrumbPage = isServiceRequestPage
+    ? serviceRequestCategoryFilter === 'all'
+      ? 'Service Request'
+      : serviceRequestCategoryFilter
+    : activeNavItem?.title ?? 'Overview';
   const isSubscribersPage = pathname === '/main/subscribers';
   const isInstallationsPage = pathname === '/main/installations';
   const isJobOrdersPage = pathname === '/main/job-orders';
-  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage;
+  const isBranchesPage = pathname === '/main/branches';
+  const isSubscriptionPlansPage = pathname === '/main/subscription-plans';
+  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage || isBranchesPage || isSubscriptionPlansPage;
   const subscriberSearch = searchParams.get('q') ?? '';
+  const subscriberStatusFilter = searchParams.get('status') ?? 'all';
+  const subscriberPlanFilter = searchParams.get('plan') ?? 'all';
+  const activeSubscriberFilters = [
+    subscriberStatusFilter !== 'all',
+    subscriberPlanFilter !== 'all',
+  ].filter(Boolean).length;
+  const subscriptionPlanStatusFilter = searchParams.get('status') ?? 'all';
+  const subscriptionPlanCategoryFilter = searchParams.get('category') ?? 'all';
+  const activeSubscriptionPlanFilters = [
+    subscriptionPlanStatusFilter !== 'all',
+    subscriptionPlanCategoryFilter !== 'all',
+  ].filter(Boolean).length;
   const searchPlaceholder = isJobOrdersPage
     ? 'Search job orders'
     : isInstallationsPage
       ? 'Search installations'
-      : 'Search subscribers';
+      : isBranchesPage
+        ? 'Search branches'
+        : isSubscriptionPlansPage
+          ? 'Search plans'
+          : 'Search subscribers';
   const addButtonLabel = isJobOrdersPage
     ? 'Add Job Order'
     : isInstallationsPage
       ? 'Add Installation'
-      : 'Add Subscriber';
+      : isBranchesPage
+        ? 'Add Branch'
+        : isSubscriptionPlansPage
+          ? 'Add Plan'
+          : 'Add Subscriber';
+  const initials = user.name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U';
+
+  const handleWorkspaceSelect = React.useCallback(
+    (workspace: (typeof DATA.workspaces)[number]) => {
+      setActiveWorkspace(workspace);
+
+      const nextRoute = WORKSPACE_DEFAULT_ROUTES[workspace.plan];
+
+      if (pathname === nextRoute) return;
+
+      router.replace(nextRoute, {
+        scroll: false,
+      });
+    },
+    [pathname, router],
+  );
 
   const updateSubscriberSearch = React.useCallback(
     (value: string) => {
@@ -209,7 +321,7 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
   );
 
   const handleAddClick = React.useCallback(() => {
-    if (!isJobOrdersPage) return;
+    if (!isSubscribersPage && !isJobOrdersPage && !isBranchesPage && !isSubscriptionPlansPage) return;
 
     const params = new URLSearchParams(searchParams.toString());
 
@@ -217,7 +329,78 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
     router.replace(`${pathname}?${params.toString()}`, {
       scroll: false,
     });
-  }, [isJobOrdersPage, pathname, router, searchParams]);
+  }, [isBranchesPage, isJobOrdersPage, isSubscribersPage, isSubscriptionPlansPage, pathname, router, searchParams]);
+
+  const handleCategoryClick = React.useCallback(() => {
+    if (!isSubscriptionPlansPage) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.set('categoryDrawer', 'create');
+    router.replace(`${pathname}?${params.toString()}`, {
+      scroll: false,
+    });
+  }, [isSubscriptionPlansPage, pathname, router, searchParams]);
+
+  const updateSubscriberFilter = React.useCallback(
+    (key: 'status' | 'plan', value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      if (value === 'all') {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+
+      const queryString = params.toString();
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+        scroll: false,
+      });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const clearSubscriberFilters = React.useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.delete('status');
+    params.delete('plan');
+
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+      scroll: false,
+    });
+  }, [pathname, router, searchParams]);
+
+  const updateSubscriptionPlanFilter = React.useCallback(
+    (key: 'status' | 'category', value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      if (value === 'all') {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+
+      const queryString = params.toString();
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+        scroll: false,
+      });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const clearSubscriptionPlanFilters = React.useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.delete('status');
+    params.delete('category');
+
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+      scroll: false,
+    });
+  }, [pathname, router, searchParams]);
 
   const expandSearch = React.useCallback(() => {
     setIsSearchExpanded(true);
@@ -250,30 +433,41 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
     setIsSearchExpanded(false);
   }, [pathname]);
 
-  if (!activeTeam) return null;
+  React.useEffect(() => {
+    const workspaceForPath = getWorkspaceForPath(pathname);
+
+    setActiveWorkspace((currentWorkspace) =>
+      currentWorkspace.plan === workspaceForPath.plan ? currentWorkspace : workspaceForPath,
+    );
+  }, [getWorkspaceForPath, pathname]);
+
+  if (!activeWorkspace) return null;
 
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" >
         <SidebarHeader>
-          {/* Team Switcher */}
+          {/* Workspace Switcher */}
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="group/team-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="group/workspace-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-600 text-sidebar-primary-foreground">
-                      <activeTeam.logo className="size-4" />
+                      <activeWorkspace.logo className="size-4" />
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">
-                        {activeTeam.name}
+                        {activeWorkspace.name}
                       </span>
+                      <p className='text-xs'>
+                        {activeWorkspace.plan}
+                      </p>
                     </div>
-                    <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/team-trigger:rotate-180" />
+                    <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/workspace-trigger:rotate-180" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -283,94 +477,88 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                   sideOffset={4}
                 >
                   <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    Teams
+                    Workspaces
                   </DropdownMenuLabel>
-                  {DATA.teams.map((team, index) => (
+                  {DATA.workspaces.map((workspace, index) => (
                     <DropdownMenuItem
-                      key={team.name}
-                      onClick={() => setActiveTeam(team)}
+                      key={`${workspace.name}-${workspace.plan}`}
+                      onClick={() => handleWorkspaceSelect(workspace)}
                       className="gap-2 p-2"
                     >
                       <div className="flex size-6 items-center justify-center rounded-sm border">
-                        <team.logo className="size-4 shrink-0" />
+                        <workspace.logo className="size-4 shrink-0" />
                       </div>
-                      {team.name}
+                      {workspace.plan}
                       <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
                     </DropdownMenuItem>
                   ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="gap-2 p-2">
-                    <div className="flex size-6 items-center justify-center rounded-md border bg-background">
-                      <Plus className="size-4" />
-                    </div>
-                    <div className="font-medium text-muted-foreground">
-                      Add team
-                    </div>
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
-          {/* Team Switcher */}
+          {/* Workspace Switcher */}
         </SidebarHeader>
 
         <SidebarContent>
           {/* Nav Main */}
-          <SidebarGroup>
-            <SidebarMenu>
-              {DATA.navMain.map((item) => {
-                const isActive = pathname === item.url;
-                return item.items && item.items.length > 0 ? (
-                  <Collapsible
-                    key={item.title}
-                    asChild
-                    defaultOpen={item.isActive || isActive}
-                    className="group/collapsible"
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+          {activeNavMain.length > 0 && (
+            <SidebarGroup>
+              <SidebarMenu>
+                {activeNavMain.map((item) => {
+                  const isActive = pathname === item.url;
+                  return item.items && item.items.length > 0 ? (
+                    <Collapsible
+                      key={item.title}
+                      asChild
+                      defaultOpen={item.isActive || isActive}
+                      className="group/collapsible"
+                    >
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                            {item.icon && <item.icon />}
+                            <span>{item.title}</span>
+                            <ChevronRight className="ml-auto transition-transform duration-300 group-data-[state=open]/collapsible:rotate-90" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.items.map((subItem) => (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                <SidebarMenuSubButton asChild>
+                                  <Link href={subItem.url}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  ) : (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                        <Link href={item.url}>
                           {item.icon && <item.icon />}
                           <span>{item.title}</span>
-                          <ChevronRight className="ml-auto transition-transform duration-300 group-data-[state=open]/collapsible:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild>
-                                <Link href={subItem.url}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
+                        </Link>
+                      </SidebarMenuButton>
                     </SidebarMenuItem>
-                  </Collapsible>
-                ) : (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                      <Link href={item.url}>
-                        {item.icon && <item.icon />}
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
           {/* Nav Main */}
 
           {/* Nav Project */}
+          {activeProjects.length > 0 && (
           <SidebarGroup className="group-data-[collapsible=icon]:hidden">
             <SidebarGroupLabel>Service Request</SidebarGroupLabel>
             <SidebarMenu>
-              {DATA.projects.map((item) => {
-                const isActive = pathname === item.url;
+              {activeProjects.map((item) => {
+                const isActive = pathname === '/main/service-request' && serviceRequestCategoryFilter === item.name;
                 return (
                   <SidebarMenuItem key={item.name}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -379,44 +567,21 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                         <span>{item.name}</span>
                       </Link>
                     </SidebarMenuButton>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <SidebarMenuAction showOnHover>
-                          <MoreHorizontal />
-                          <span className="sr-only">More</span>
-                        </SidebarMenuAction>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        className="w-48 rounded-lg"
-                        side={isMobile ? 'bottom' : 'right'}
-                        align={isMobile ? 'end' : 'start'}
-                      >
-                        <DropdownMenuItem>
-                          <Folder className="text-muted-foreground" />
-                          <span>View Project</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Forward className="text-muted-foreground" />
-                          <span>Share Project</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                          <Trash2 className="text-muted-foreground" />
-                          <span>Delete Project</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <SidebarMenuBadge>{item.pendingCount}</SidebarMenuBadge>
                   </SidebarMenuItem>
                 );
               })}
               <SidebarMenuItem>
-                <SidebarMenuButton className="text-sidebar-foreground/70">
-                  <MoreHorizontal className="text-sidebar-foreground/70" />
-                  <span>More</span>
+                <SidebarMenuButton asChild className="pr-2 text-sidebar-foreground/70">
+                  <Link href="/main/subscription-plans?categoryDrawer=create">
+                    <Plus />
+                    <span>Category</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
+          )}
           {/* Nav Project */}
         </SidebarContent>
         <SidebarFooter>
@@ -431,17 +596,17 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage
-                        src={DATA.user.avatar}
-                        alt={DATA.user.name}
+                        src={user.avatar ?? undefined}
+                        alt={user.name}
                       />
-                      <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                      <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">
-                        {DATA.user.name}
+                        {user.name}
                       </span>
                       <span className="truncate text-xs">
-                        {DATA.user.email}
+                        {user.email}
                       </span>
                     </div>
                     <ChevronDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/user-trigger:rotate-180" />
@@ -457,19 +622,19 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                       <Avatar className="h-8 w-8 rounded-lg">
                         <AvatarImage
-                          src={DATA.user.avatar}
-                          alt={DATA.user.name}
+                          src={user.avatar ?? undefined}
+                          alt={user.name}
                         />
                         <AvatarFallback className="rounded-lg">
-                          CN
+                          {initials}
                         </AvatarFallback>
                       </Avatar>
                       <div className="grid flex-1 text-left text-sm leading-tight">
                         <span className="truncate font-semibold">
-                          {DATA.user.name}
+                          {user.name}
                         </span>
                         <span className="truncate text-xs">
-                          {DATA.user.email}
+                          {user.email}
                         </span>
                       </div>
                     </div>
@@ -477,19 +642,8 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuItem>
-                      <Sparkles />
-                      Upgrade to Pro
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem>
                       <BadgeCheck />
-                      Account
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <CreditCard />
-                      Billing
+                      {user.role}
                     </DropdownMenuItem>
                     <DropdownMenuItem>
                       <Bell />
@@ -511,9 +665,19 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                     />
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <LogOut />
-                    Log out
+                  <DropdownMenuItem
+                    className="p-0"
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    <form action={logout} className="w-full">
+                      <button
+                        type="submit"
+                        className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
+                      >
+                        <LogOut />
+                        Log out
+                      </button>
+                    </form>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -533,7 +697,7 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
                   <BreadcrumbLink href="/main/overview">
-                    {activeTeam.name}
+                    {activeWorkspace.plan}
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
@@ -572,7 +736,117 @@ export const RadixSidebarDemo = ({ children }: RadixSidebarDemoProps) => {
                   <Search />
                 </Button>
               )}
+              {isSubscriptionPlansPage && (
+                <Button type="button" variant="ghost" size="sm" onClick={handleCategoryClick}>
+                  <Settings2 data-icon="inline-start" />
+                  <span className="hidden sm:inline">Category</span>
+                </Button>
+              )}
               <div className="flex shrink-0 items-center gap-1.5">
+                {isSubscribersPage && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={activeSubscriberFilters > 0 ? 'bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary' : undefined}
+                      >
+                        <Funnel data-icon="inline-start" />
+                        <span className="hidden sm:inline">
+                          Filters{activeSubscriberFilters > 0 ? ` (${activeSubscriberFilters})` : ''}
+                        </span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Status</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={subscriberStatusFilter}
+                        onValueChange={(value) => updateSubscriberFilter('status', value)}
+                      >
+                        <DropdownMenuRadioItem value="all">All statuses</DropdownMenuRadioItem>
+                        {SUBSCRIBER_STATUS_FILTERS.map((status) => (
+                          <DropdownMenuRadioItem key={status} value={status}>
+                            {status}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Plan</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={subscriberPlanFilter}
+                        onValueChange={(value) => updateSubscriberFilter('plan', value)}
+                      >
+                        <DropdownMenuRadioItem value="all">All plans</DropdownMenuRadioItem>
+                        {SUBSCRIBER_PLAN_FILTERS.map((plan) => (
+                          <DropdownMenuRadioItem key={plan} value={plan}>
+                            {plan}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      {activeSubscriberFilters > 0 && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={clearSubscriberFilters}>
+                            Clear filters
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {isSubscriptionPlansPage && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={activeSubscriptionPlanFilters > 0 ? 'bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary' : undefined}
+                      >
+                        <Funnel data-icon="inline-start" />
+                        <span className="hidden sm:inline">
+                          Filters{activeSubscriptionPlanFilters > 0 ? ` (${activeSubscriptionPlanFilters})` : ''}
+                        </span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Status</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={subscriptionPlanStatusFilter}
+                        onValueChange={(value) => updateSubscriptionPlanFilter('status', value)}
+                      >
+                        <DropdownMenuRadioItem value="all">All statuses</DropdownMenuRadioItem>
+                        {SUBSCRIPTION_PLAN_STATUS_FILTERS.map((status) => (
+                          <DropdownMenuRadioItem key={status} value={status}>
+                            {status}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Category</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={subscriptionPlanCategoryFilter}
+                        onValueChange={(value) => updateSubscriptionPlanFilter('category', value)}
+                      >
+                        <DropdownMenuRadioItem value="all">All categories</DropdownMenuRadioItem>
+                        {SUBSCRIPTION_PLAN_CATEGORY_FILTERS.map((category) => (
+                          <DropdownMenuRadioItem key={category} value={category}>
+                            {category}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      {activeSubscriptionPlanFilters > 0 && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={clearSubscriptionPlanFilters}>
+                            Clear filters
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <Button type="button" variant="ghost" size="sm">
                   <Upload data-icon="inline-start" />
                   <span className="hidden sm:inline">Import</span>
