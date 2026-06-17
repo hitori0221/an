@@ -1,8 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { buildSubscriptionPlanCode } from '@/lib/subscription-plan-code'
 
 import type {
   PlanStatus,
+  SubscriptionCategoryField,
+  SubscriptionCategoryFieldType,
   SubscriptionPlan,
+  SubscriptionPlanCategoryIcon,
   SubscriptionPlanCategory,
   SubscriptionPlanCategoryGroup,
 } from '@/app/main/subscription-plans/_components/data-table/types'
@@ -11,8 +15,21 @@ type CategoryRow = {
   id: string
   name: string
   description: string | null
+  icon_data_url: string | null
   created_at?: string
   updated_at?: string
+}
+
+type CategoryInput = {
+  name: string
+  iconDataUrl?: string | null
+}
+
+export type ServiceRequestCategory = {
+  id: string
+  name: string
+  iconDataUrl?: string | null
+  pendingCount: number
 }
 
 type SubscriptionPlanRow = {
@@ -60,6 +77,27 @@ type CategoryGroupRow = {
     | null
 }
 
+type CategoryFieldRow = {
+  id: string
+  category_id: string
+  field_key: string
+  label: string
+  field_type: SubscriptionCategoryFieldType
+  placeholder: string | null
+  is_required: boolean
+  options: unknown
+  sort_order: number
+}
+
+type CategoryFieldInput = {
+  label: string
+  type: SubscriptionCategoryFieldType
+  placeholder?: string | null
+  required?: boolean
+  options?: string[]
+  sortOrder?: number
+}
+
 const formatPlanDate = (value: string) =>
   new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -71,9 +109,67 @@ const normalizeCategory = (category: CategoryRow): SubscriptionPlanCategory => (
   id: category.id,
   name: category.name,
   description: category.description,
+  iconDataUrl: category.icon_data_url,
 })
 
-const normalizePlan = (plan: SubscriptionPlanRow): SubscriptionPlan => {
+const normalizeCategoryIconDataUrl = (value: string | null | undefined) => {
+  const trimmedValue = value?.trim()
+
+  if (!trimmedValue) return null
+
+  if (!/^data:image\/(jpeg|png|webp);base64,/i.test(trimmedValue)) {
+    throw new Error('Category icon must be a JPEG, PNG, or WebP data URL')
+  }
+
+  if (trimmedValue.length > 131072) {
+    throw new Error('Category icon is too large to store in the database')
+  }
+
+  return trimmedValue
+}
+
+const toFieldKey = (label: string) =>
+  label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64) || `field_${Date.now()}`
+
+const buildCategoryIconMaps = (
+  categories: SubscriptionPlanCategory[],
+  groups: SubscriptionPlanCategoryGroup[],
+) => {
+  const categoryIconById = new Map<string, SubscriptionPlanCategoryIcon>(
+    categories.map((category) => [
+      category.id,
+      {
+        id: category.id,
+        name: category.name,
+        iconDataUrl: category.iconDataUrl ?? null,
+      },
+    ]),
+  )
+  const groupCategoryIconsById = new Map<string, SubscriptionPlanCategoryIcon[]>(
+    groups.map((group) => [
+      group.id,
+      group.categoryIds
+        .map((categoryId) => categoryIconById.get(categoryId))
+        .filter((category): category is SubscriptionPlanCategoryIcon => Boolean(category)),
+    ]),
+  )
+
+  return {
+    categoryIconById,
+    groupCategoryIconsById,
+  }
+}
+
+const normalizePlan = (
+  plan: SubscriptionPlanRow,
+  categoryIconById = new Map<string, SubscriptionPlanCategoryIcon>(),
+  groupCategoryIconsById = new Map<string, SubscriptionPlanCategoryIcon[]>(),
+): SubscriptionPlan => {
   const category = Array.isArray(plan.subscription_plan_categories)
     ? plan.subscription_plan_categories[0]
     : plan.subscription_plan_categories
@@ -81,6 +177,17 @@ const normalizePlan = (plan: SubscriptionPlanRow): SubscriptionPlan => {
     ? plan.subscription_plan_groups[0]
     : plan.subscription_plan_groups
   const planTarget = group ?? category
+  const categoryIcons = group?.id
+    ? groupCategoryIconsById.get(group.id) ?? []
+    : category?.id
+      ? [
+          categoryIconById.get(category.id) ?? {
+            id: category.id,
+            name: category.name,
+            iconDataUrl: null,
+          },
+        ]
+      : []
 
   return {
     id: plan.id,
@@ -90,6 +197,7 @@ const normalizePlan = (plan: SubscriptionPlanRow): SubscriptionPlan => {
     groupId: group?.id ?? null,
     categoryType: group ? 'group' : 'category',
     category: planTarget?.name ?? 'Uncategorized',
+    categoryIcons,
     billingType: plan.billing_type,
     speed: plan.speed,
     channels: plan.channels,
@@ -108,6 +216,20 @@ const normalizeCategoryGroup = (group: CategoryGroupRow): SubscriptionPlanCatego
   ),
 })
 
+const normalizeCategoryField = (field: CategoryFieldRow): SubscriptionCategoryField => ({
+  id: field.id,
+  categoryId: field.category_id,
+  key: field.field_key,
+  label: field.label,
+  type: field.field_type,
+  placeholder: field.placeholder,
+  required: field.is_required,
+  options: Array.isArray(field.options)
+    ? field.options.filter((option): option is string => typeof option === 'string')
+    : [],
+  sortOrder: field.sort_order,
+})
+
 export async function getSubscriptionPlansPageData() {
   const supabase = await createClient()
 
@@ -115,10 +237,11 @@ export async function getSubscriptionPlansPageData() {
     { data: categoryRows, error: categoryError },
     { data: groupRows, error: groupError },
     { data: planRows, error: planError },
+    { data: fieldRows, error: fieldError },
   ] = await Promise.all([
       supabase
         .from('subscription_plan_categories')
-        .select('id, name, description')
+        .select('id, name, description, icon_data_url')
         .order('name', { ascending: true }),
       supabase
         .from('subscription_plan_groups')
@@ -159,6 +282,10 @@ export async function getSubscriptionPlansPageData() {
         `,
         )
         .order('created_at', { ascending: true }),
+      supabase
+        .from('subscription_category_fields')
+        .select('id, category_id, field_key, label, field_type, placeholder, is_required, options, sort_order')
+        .order('sort_order', { ascending: true }),
     ])
 
   if (categoryError) {
@@ -173,10 +300,21 @@ export async function getSubscriptionPlansPageData() {
     throw new Error(`Unable to load subscription plan category groups: ${groupError.message}`)
   }
 
+  if (fieldError) {
+    throw new Error(`Unable to load subscription category fields: ${fieldError.message}`)
+  }
+
+  const categories = (categoryRows ?? []).map(normalizeCategory)
+  const groups = ((groupRows ?? []) as CategoryGroupRow[]).map(normalizeCategoryGroup)
+  const { categoryIconById, groupCategoryIconsById } = buildCategoryIconMaps(categories, groups)
+
   return {
-    categories: (categoryRows ?? []).map(normalizeCategory),
-    groups: ((groupRows ?? []) as CategoryGroupRow[]).map(normalizeCategoryGroup),
-    plans: ((planRows ?? []) as SubscriptionPlanRow[]).map(normalizePlan),
+    categories,
+    groups,
+    plans: ((planRows ?? []) as SubscriptionPlanRow[]).map((plan) =>
+      normalizePlan(plan, categoryIconById, groupCategoryIconsById),
+    ),
+    fields: ((fieldRows ?? []) as CategoryFieldRow[]).map(normalizeCategoryField),
   }
 }
 
@@ -184,7 +322,7 @@ export async function listSubscriptionPlanCategories() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('subscription_plan_categories')
-    .select('id, name, description')
+    .select('id, name, description, icon_data_url')
     .order('name', { ascending: true })
 
   if (error) {
@@ -194,12 +332,54 @@ export async function listSubscriptionPlanCategories() {
   return (data ?? []).map(normalizeCategory)
 }
 
-export async function createSubscriptionPlanCategory(name: string) {
+export async function listServiceRequestCategories(): Promise<ServiceRequestCategory[]> {
+  const supabase = await createClient()
+  const [
+    { data: categoryRows, error: categoryError },
+    { data: planRows, error: planError },
+  ] = await Promise.all([
+    supabase
+      .from('subscription_plan_categories')
+      .select('id, name, description, icon_data_url')
+      .order('name', { ascending: true }),
+    supabase
+      .from('subscription_plans')
+      .select('category_id, group_id'),
+  ])
+
+  if (categoryError) {
+    throw new Error(`Unable to load service request categories: ${categoryError.message}`)
+  }
+
+  if (planError) {
+    throw new Error(`Unable to load service request category counts: ${planError.message}`)
+  }
+
+  const directPlanCountByCategoryId = (planRows ?? []).reduce<Record<string, number>>((counts, plan) => {
+    if (!plan.category_id || plan.group_id) return counts
+
+    counts[plan.category_id] = (counts[plan.category_id] ?? 0) + 1
+
+    return counts
+  }, {})
+
+  return (categoryRows ?? []).map((category) => ({
+    id: category.id,
+    name: category.name,
+    iconDataUrl: category.icon_data_url,
+    pendingCount: directPlanCountByCategoryId[category.id] ?? 0,
+  }))
+}
+
+export async function createSubscriptionPlanCategory(input: CategoryInput) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('subscription_plan_categories')
-    .insert({ name })
-    .select('id, name, description')
+    .insert({
+      name: input.name.trim(),
+      icon_data_url: normalizeCategoryIconDataUrl(input.iconDataUrl),
+    })
+    .select('id, name, description, icon_data_url')
     .single()
 
   if (error) {
@@ -209,13 +389,17 @@ export async function createSubscriptionPlanCategory(name: string) {
   return normalizeCategory(data)
 }
 
-export async function renameSubscriptionPlanCategory(categoryId: string, name: string) {
+export async function updateSubscriptionPlanCategory(categoryId: string, input: CategoryInput) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('subscription_plan_categories')
-    .update({ name })
+    .update({
+      name: input.name.trim(),
+      icon_data_url: normalizeCategoryIconDataUrl(input.iconDataUrl),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', categoryId)
-    .select('id, name, description')
+    .select('id, name, description, icon_data_url')
     .single()
 
   if (error) {
@@ -231,6 +415,69 @@ export async function deleteSubscriptionPlanCategory(categoryId: string) {
 
   if (error) {
     throw new Error(`Unable to delete subscription plan category: ${error.message}`)
+  }
+}
+
+export async function createSubscriptionCategoryField(
+  categoryId: string,
+  input: CategoryFieldInput,
+) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('subscription_category_fields')
+    .insert({
+      category_id: categoryId,
+      field_key: toFieldKey(input.label),
+      label: input.label.trim(),
+      field_type: input.type,
+      placeholder: input.placeholder?.trim() || null,
+      is_required: input.required ?? false,
+      options: input.options ?? [],
+      sort_order: input.sortOrder ?? 0,
+    })
+    .select('id, category_id, field_key, label, field_type, placeholder, is_required, options, sort_order')
+    .single()
+
+  if (error) {
+    throw new Error(`Unable to create subscription category field: ${error.message}`)
+  }
+
+  return normalizeCategoryField(data as CategoryFieldRow)
+}
+
+export async function updateSubscriptionCategoryField(
+  fieldId: string,
+  input: CategoryFieldInput,
+) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('subscription_category_fields')
+    .update({
+      label: input.label.trim(),
+      field_type: input.type,
+      placeholder: input.placeholder?.trim() || null,
+      is_required: input.required ?? false,
+      options: input.options ?? [],
+      sort_order: input.sortOrder ?? 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', fieldId)
+    .select('id, category_id, field_key, label, field_type, placeholder, is_required, options, sort_order')
+    .single()
+
+  if (error) {
+    throw new Error(`Unable to update subscription category field: ${error.message}`)
+  }
+
+  return normalizeCategoryField(data as CategoryFieldRow)
+}
+
+export async function deleteSubscriptionCategoryField(fieldId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('subscription_category_fields').delete().eq('id', fieldId)
+
+  if (error) {
+    throw new Error(`Unable to delete subscription category field: ${error.message}`)
   }
 }
 
@@ -340,47 +587,90 @@ export async function deleteSubscriptionPlanCategoryGroup(groupId: string) {
 
 export async function listSubscriptionPlans() {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('subscription_plans')
-    .select(
-      `
-      id,
-      category_id,
-      group_id,
-      plan_code,
-      name,
-      billing_type,
-      speed,
-      channels,
-      price,
-      subscribers,
-      status,
-      updated_at,
-      subscription_plan_categories (
+  const [
+    { data: categoryRows, error: categoryError },
+    { data: groupRows, error: groupError },
+    { data, error },
+  ] = await Promise.all([
+    supabase
+      .from('subscription_plan_categories')
+      .select('id, name, description, icon_data_url')
+      .order('name', { ascending: true }),
+    supabase
+      .from('subscription_plan_groups')
+      .select(
+        `
         id,
-        name
-      ),
-      subscription_plan_groups (
-        id,
-        name
+        name,
+        subscription_plan_group_categories (
+          category_id
+        )
+      `,
       )
-    `,
-    )
-    .order('created_at', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('subscription_plans')
+      .select(
+        `
+        id,
+        category_id,
+        group_id,
+        plan_code,
+        name,
+        billing_type,
+        speed,
+        channels,
+        price,
+        subscribers,
+        status,
+        updated_at,
+        subscription_plan_categories (
+          id,
+          name
+        ),
+        subscription_plan_groups (
+          id,
+          name
+        )
+      `,
+      )
+      .order('created_at', { ascending: true }),
+  ])
+
+  if (categoryError) {
+    throw new Error(`Unable to load subscription plan categories: ${categoryError.message}`)
+  }
+
+  if (groupError) {
+    throw new Error(`Unable to load subscription plan category groups: ${groupError.message}`)
+  }
 
   if (error) {
     throw new Error(`Unable to load subscription plans: ${error.message}`)
   }
 
-  return ((data ?? []) as SubscriptionPlanRow[]).map(normalizePlan)
+  const categories = (categoryRows ?? []).map(normalizeCategory)
+  const groups = ((groupRows ?? []) as CategoryGroupRow[]).map(normalizeCategoryGroup)
+  const { categoryIconById, groupCategoryIconsById } = buildCategoryIconMaps(categories, groups)
+
+  return ((data ?? []) as SubscriptionPlanRow[]).map((plan) =>
+    normalizePlan(plan, categoryIconById, groupCategoryIconsById),
+  )
 }
 
 export async function createSubscriptionPlan(input: SubscriptionPlan) {
   const supabase = await createClient()
+  const planCode = (input.code.trim() || buildSubscriptionPlanCode({
+    name: input.name,
+    targetName: input.category,
+    speed: input.speed,
+    price: input.price,
+  })).toUpperCase()
+
   const { data, error } = await supabase
     .from('subscription_plans')
     .insert({
-      plan_code: input.code,
+      plan_code: planCode,
       name: input.name,
       category_id: input.categoryType === 'group' ? null : input.categoryId,
       group_id: input.categoryType === 'group' ? input.groupId : null,
@@ -426,10 +716,17 @@ export async function createSubscriptionPlan(input: SubscriptionPlan) {
 
 export async function updateSubscriptionPlan(input: SubscriptionPlan) {
   const supabase = await createClient()
+  const planCode = (input.code.trim() || buildSubscriptionPlanCode({
+    name: input.name,
+    targetName: input.category,
+    speed: input.speed,
+    price: input.price,
+  })).toUpperCase()
+
   const { data, error } = await supabase
     .from('subscription_plans')
     .update({
-      plan_code: input.code,
+      plan_code: planCode,
       name: input.name,
       category_id: input.categoryType === 'group' ? null : input.categoryId,
       group_id: input.categoryType === 'group' ? input.groupId : null,

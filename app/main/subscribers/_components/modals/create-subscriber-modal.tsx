@@ -8,23 +8,47 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { SubscriberForm } from '../forms/subscriber-form'
-import type { Subscriber } from '../data-table/types'
+import type {
+  Subscriber,
+  SubscriberBranchOption,
+  SubscriberCategoryField,
+  SubscriberModemOption,
+  SubscriberPlanOption,
+  SubscriberSubscriptionCategoryGroupOption,
+  SubscriberSubscriptionCategoryOption,
+} from '../data-table/types'
 
 type CreateSubscriberModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   nextAccountNumber: string
+  subscriber?: Subscriber | null
+  categories: SubscriberSubscriptionCategoryOption[]
+  categoryGroups: SubscriberSubscriptionCategoryGroupOption[]
+  plans: SubscriberPlanOption[]
+  branches: SubscriberBranchOption[]
+  modems: SubscriberModemOption[]
+  categoryFields: SubscriberCategoryField[]
   onCancel: () => void
-  onSubmit: (subscriber: Subscriber) => void
+  onSubmit: (formData: FormData) => Promise<boolean>
 }
 
 export function CreateSubscriberModal({
   open,
   onOpenChange,
   nextAccountNumber,
+  subscriber,
+  categories,
+  categoryGroups,
+  plans,
+  branches,
+  modems,
+  categoryFields,
   onCancel,
   onSubmit,
 }: CreateSubscriberModalProps) {
+  const isEditing = Boolean(subscriber)
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
@@ -42,23 +66,33 @@ export function CreateSubscriberModal({
             <DialogPrimitive.Content asChild forceMount>
               <motion.div
                 className={cn(
-                  'fixed left-1/2 top-1/2 z-50 flex w-[calc(100vw-2rem)] max-w-[560px] flex-col overflow-hidden rounded-md border bg-background shadow-lg',
+                  'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-background shadow-lg',
                 )}
-                initial={{ opacity: 0, scale: 0.96, x: '-50%', y: '-46%' }}
-                animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
-                exit={{ opacity: 0, scale: 0.96, x: '-50%', y: '-46%' }}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 16 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               >
-                <div className='flex flex-col gap-1.5 p-4 pr-12'>
-                  <DialogPrimitive.Title className='font-semibold text-foreground'>
-                    Add Subscriber
+                <div className='flex shrink-0 flex-col gap-1.5 border-b p-4 pr-12 sm:px-6'>
+                  <DialogPrimitive.Title className='text-lg font-semibold text-foreground'>
+                    {isEditing ? 'Edit Subscriber' : 'Add Subscriber'}
                   </DialogPrimitive.Title>
                   <DialogPrimitive.Description className='text-sm text-muted-foreground'>
-                    Create a subscriber account and service profile.
+                    {isEditing
+                      ? 'Update the subscriber account, contract details, and service profile.'
+                      : 'Create a subscriber account, contract details, and service profile.'}
                   </DialogPrimitive.Description>
                 </div>
                 <SubscriberForm
                   nextAccountNumber={nextAccountNumber}
+                  subscriber={subscriber}
+                  submitLabel={isEditing ? 'Save Subscriber' : 'Add Subscriber'}
+                  categories={categories}
+                  categoryGroups={categoryGroups}
+                  plans={plans}
+                  branches={branches}
+                  modems={modems}
+                  categoryFields={categoryFields}
                   onCancel={onCancel}
                   onSubmit={onSubmit}
                 />

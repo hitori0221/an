@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import SubscriptionPlansDataTable from './data-table/data-table'
 import type {
+  SubscriptionCategoryField,
+  SubscriptionCategoryFieldType,
   SubscriptionPlan,
   SubscriptionPlanCategory,
   SubscriptionPlanCategoryGroup,
@@ -14,7 +16,28 @@ import { CategoryDrawer } from './modals/category-drawer'
 type SubscriptionPlansClientProps = {
   initialPlans: SubscriptionPlan[]
   categories: SubscriptionPlanCategory[]
+  fields: SubscriptionCategoryField[]
   groups: SubscriptionPlanCategoryGroup[]
+}
+
+type CategoryFieldInput = {
+  label: string
+  type: SubscriptionCategoryFieldType
+  placeholder?: string | null
+  required?: boolean
+  options?: string[]
+  sortOrder?: number
+}
+
+type CategoryInput = {
+  name: string
+  iconDataUrl?: string | null
+}
+
+const readApiError = async (response: Response, fallback: string) => {
+  const body = (await response.json().catch(() => null)) as { error?: string } | null
+
+  return body?.error ?? fallback
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
@@ -26,6 +49,7 @@ const currencyFormatter = new Intl.NumberFormat('en-PH', {
 export function SubscriptionPlansClient({
   initialPlans,
   categories,
+  fields,
   groups,
 }: SubscriptionPlansClientProps) {
   const pathname = usePathname()
@@ -34,6 +58,7 @@ export function SubscriptionPlansClient({
   const [isCategoryOpen, setIsCategoryOpen] = useState(false)
   const [subscriptionPlans, setSubscriptionPlans] = useState(initialPlans)
   const [subscriptionPlanCategories, setSubscriptionPlanCategories] = useState(categories)
+  const [subscriptionCategoryFields, setSubscriptionCategoryFields] = useState(fields)
   const [subscriptionPlanCategoryGroups, setSubscriptionPlanCategoryGroups] = useState(groups)
   const categoryDrawerMode = searchParams.get('categoryDrawer')
   const totalSubscribers = subscriptionPlans.reduce((total, plan) => total + plan.subscribers, 0)
@@ -50,12 +75,13 @@ export function SubscriptionPlansClient({
             categoryMap.set(category.id, {
               id: category.id,
               name: category.name,
+              iconDataUrl: category.iconDataUrl,
               plans: 0,
               subscribers: 0,
             })
 
             return categoryMap
-          }, new Map<string, { id: string; name: string; plans: number; subscribers: number; groups?: string[] }>())
+          }, new Map<string, { id: string; name: string; iconDataUrl?: string | null; plans: number; subscribers: number; groups?: string[] }>())
           .values(),
       ).map((category) => {
         const matchingPlans = subscriptionPlans.filter((plan) => plan.categoryId === category.id)
@@ -82,17 +108,20 @@ export function SubscriptionPlansClient({
     [subscriptionPlanCategoryGroups, subscriptionPlans],
   )
 
-  const handleCreateCategory = async (name: string) => {
+  const handleCreateCategory = async (input: CategoryInput) => {
     const response = await fetch('/api/subscription-plans/categories', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(input),
     })
 
     if (!response.ok) {
-      console.error('Unable to create subscription plan category', await response.json().catch(() => null))
+      console.error(
+        'Unable to create subscription plan category',
+        await readApiError(response, 'Unable to create subscription plan category'),
+      )
       return null
     }
 
@@ -109,18 +138,19 @@ export function SubscriptionPlansClient({
     }
   }
 
-  const handleRenameCategory = async (categoryId: string, name: string) => {
+  const handleUpdateCategory = async (categoryId: string, input: CategoryInput) => {
     const response = await fetch(`/api/subscription-plans/categories/${categoryId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(input),
     })
 
     if (!response.ok) {
-      console.error('Unable to rename subscription plan category', await response.json().catch(() => null))
-      return
+      const message = await readApiError(response, 'Unable to update subscription plan category')
+      console.error('Unable to update subscription plan category', message)
+      return null
     }
 
     const { category: updatedCategory } = (await response.json()) as {
@@ -134,6 +164,7 @@ export function SubscriptionPlansClient({
               id: updatedCategory.id,
               name: updatedCategory.name,
               description: updatedCategory.description,
+              iconDataUrl: updatedCategory.iconDataUrl,
             }
           : category,
       ),
@@ -148,6 +179,8 @@ export function SubscriptionPlansClient({
           : plan,
       ),
     )
+
+    return updatedCategory
   }
 
   const handleDeleteCategory = async (categoryId: string) => {
@@ -166,6 +199,78 @@ export function SubscriptionPlansClient({
 
     setSubscriptionPlanCategories((currentCategories) =>
       currentCategories.filter((category) => category.id !== categoryId),
+    )
+    setSubscriptionCategoryFields((currentFields) =>
+      currentFields.filter((field) => field.categoryId !== categoryId),
+    )
+
+    return true
+  }
+
+  const handleCreateField = async (categoryId: string, input: CategoryFieldInput) => {
+    const response = await fetch(`/api/subscription-plans/categories/${categoryId}/fields`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    })
+
+    if (!response.ok) {
+      console.error('Unable to create subscription category field', await response.json().catch(() => null))
+      return null
+    }
+
+    const { field } = (await response.json()) as {
+      field: SubscriptionCategoryField
+    }
+
+    setSubscriptionCategoryFields((currentFields) =>
+      [...currentFields, field].sort((first, second) => first.sortOrder - second.sortOrder),
+    )
+
+    return field
+  }
+
+  const handleUpdateField = async (fieldId: string, input: CategoryFieldInput) => {
+    const response = await fetch(`/api/subscription-plans/category-fields/${fieldId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    })
+
+    if (!response.ok) {
+      console.error('Unable to update subscription category field', await response.json().catch(() => null))
+      return null
+    }
+
+    const { field } = (await response.json()) as {
+      field: SubscriptionCategoryField
+    }
+
+    setSubscriptionCategoryFields((currentFields) =>
+      currentFields
+        .map((currentField) => (currentField.id === fieldId ? field : currentField))
+        .sort((first, second) => first.sortOrder - second.sortOrder),
+    )
+
+    return field
+  }
+
+  const handleDeleteField = async (fieldId: string) => {
+    const response = await fetch(`/api/subscription-plans/category-fields/${fieldId}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      console.error('Unable to delete subscription category field', await response.json().catch(() => null))
+      return false
+    }
+
+    setSubscriptionCategoryFields((currentFields) =>
+      currentFields.filter((field) => field.id !== fieldId),
     )
 
     return true
@@ -240,12 +345,6 @@ export function SubscriptionPlansClient({
     return true
   }
 
-  useEffect(() => {
-    if (categoryDrawerMode === 'create') {
-      setIsCategoryOpen(true)
-    }
-  }, [categoryDrawerMode])
-
   const handleCategoryOpenChange = (open: boolean) => {
     setIsCategoryOpen(open)
 
@@ -293,14 +392,18 @@ export function SubscriptionPlansClient({
         onPlansChange={setSubscriptionPlans}
       />
       <CategoryDrawer
-        open={isCategoryOpen}
+        open={isCategoryOpen || categoryDrawerMode === 'create'}
         onOpenChange={handleCategoryOpenChange}
         categories={categorySummaries}
+        fields={subscriptionCategoryFields}
         groups={groupSummaries}
         startAddingMode={categoryDrawerMode === 'create' ? 'category' : undefined}
         onCreateCategory={handleCreateCategory}
-        onRenameCategory={handleRenameCategory}
+        onUpdateCategory={handleUpdateCategory}
         onDeleteCategory={handleDeleteCategory}
+        onCreateField={handleCreateField}
+        onUpdateField={handleUpdateField}
+        onDeleteField={handleDeleteField}
         onCreateGroup={handleCreateGroup}
         onUpdateGroup={handleUpdateGroup}
         onDeleteGroup={handleDeleteGroup}

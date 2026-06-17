@@ -49,7 +49,7 @@ export const getBranchColumns = ({
     accessorKey: 'code',
     cell: ({ row }) => (
       <div className='flex items-center gap-2 font-medium'>
-        <span className='font-mono text-[13px] leading-tight text-foreground'>{row.getValue('code')}</span>
+        <span className='text-[13px] leading-tight text-foreground'>{row.getValue('code')}</span>
       </div>
     ),
   },
@@ -83,7 +83,7 @@ export const getBranchColumns = ({
       return (
         <Badge
           variant='outline'
-          className={cn('flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
+          className={cn('inline-flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
         >
           <span className='size-1.5 rounded-full bg-current' aria-hidden='true' />
           {status}

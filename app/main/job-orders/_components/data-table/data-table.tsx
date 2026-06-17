@@ -5,12 +5,44 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { Row } from '@tanstack/react-table'
 
 import { DataTable } from '@/components/data-table/shared/data-table'
-import { subscribers } from '@/app/main/subscribers/_components/data-table/data'
+import type { Subscriber } from '@/app/main/subscribers/_components/data-table/types'
 
 import { CreateJobOrderSheet } from '../modals/create-job-order-sheet'
 import { jobOrderColumns, jobOrderColumnClassNames } from './columns'
 import { jobOrders as initialJobOrders } from './data'
 import type { JobOrder } from './types'
+
+const subscribers: Subscriber[] = initialJobOrders.map((jobOrder) => ({
+  id: jobOrder.accountNumber,
+  accountNumber: jobOrder.accountNumber,
+  firstName: jobOrder.subscriberName.split(' ')[0] ?? jobOrder.subscriberName,
+  lastName: jobOrder.subscriberName.split(' ').slice(1).join(' '),
+  name: jobOrder.subscriberName,
+  phoneNumber: jobOrder.phoneNumber,
+  email: '',
+  city: jobOrder.city,
+  barangay: jobOrder.barangay,
+  streetZone: '',
+  branchId: null,
+  branch: '',
+  contractStart: '',
+  contractEnd: '',
+  subscriptionCategoryId: null,
+  subscriptionGroupId: null,
+  subscriptionCategory: '',
+  subscriptionPlanId: null,
+  plan: jobOrder.plan,
+  macAddress: '',
+  caid: '',
+  connectionType: null,
+  modemId: null,
+  modemType: '',
+  subscriptionDetails: {},
+  contractPicturePath: '',
+  remarks: '',
+  status: 'Active',
+  updatedAt: jobOrder.createdDate,
+}))
 
 const getNextTicketNumber = (jobOrders: JobOrder[]) => {
   const maxTicketNumber = jobOrders.reduce((max, jobOrder) => {
@@ -27,11 +59,11 @@ function renderJobOrderExpandedRow(row: Row<JobOrder>) {
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
         <div className='flex flex-col gap-1'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Account Number</p>
-          <p className='font-mono text-sm text-foreground'>{row.original.accountNumber}</p>
+          <p className='text-sm text-foreground'>{row.original.accountNumber}</p>
         </div>
         <div className='flex flex-col gap-1'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Phone Number</p>
-          <p className='font-mono text-sm text-foreground'>{row.original.phoneNumber}</p>
+          <p className='text-sm text-foreground'>{row.original.phoneNumber}</p>
         </div>
         <div className='flex flex-col gap-1'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Location</p>

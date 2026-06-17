@@ -11,6 +11,7 @@ import { getSubscriptionPlanColumns, subscriptionPlanColumnClassNames } from './
 import type {
   SubscriptionPlan,
   SubscriptionPlanCategory,
+  SubscriptionPlanCategoryIcon,
   SubscriptionPlanCategoryGroup,
 } from './types'
 
@@ -34,15 +35,23 @@ export default function SubscriptionPlansDataTable({
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null)
   const statusFilter = searchParams.get('status') ?? 'all'
   const categoryFilter = searchParams.get('category') ?? 'all'
-  const filteredPlans = useMemo(
+  const categoryIconById = useMemo(
     () =>
-      subscriptionPlans.filter((plan) => {
-        const matchesStatus = statusFilter === 'all' || plan.status === statusFilter
-        const matchesCategory = categoryFilter === 'all' || plan.category === categoryFilter
-
-        return matchesStatus && matchesCategory
-      }),
-    [categoryFilter, statusFilter, subscriptionPlans],
+      new Map<string, SubscriptionPlanCategoryIcon>(
+        categories.map((category) => [
+          category.id,
+          {
+            id: category.id,
+            name: category.name,
+            iconDataUrl: category.iconDataUrl ?? null,
+          },
+        ]),
+      ),
+    [categories],
+  )
+  const groupById = useMemo(
+    () => new Map(groups.map((group) => [group.id, group])),
+    [groups],
   )
   const isCreateOpen = searchParams.get('create') === '1'
 
@@ -55,26 +64,58 @@ export default function SubscriptionPlansDataTable({
     })
   }
 
-  const columns = useMemo(
-    () =>
-      getSubscriptionPlanColumns({
-        onEdit: setEditingPlan,
-        onDelete: async (plan) => {
-          const response = await fetch(`/api/subscription-plans/plans/${plan.id}`, {
-            method: 'DELETE',
-          })
+  const withCategoryIcons = (plan: SubscriptionPlan): SubscriptionPlan => {
+    if (plan.categoryType === 'group' && plan.groupId) {
+      const group = groupById.get(plan.groupId)
 
-          if (!response.ok) {
-            console.error('Unable to delete subscription plan', await response.json().catch(() => null))
-            return
-          }
+      return {
+        ...plan,
+        categoryIcons:
+          group?.categoryIds
+            .map((categoryId) => categoryIconById.get(categoryId))
+            .filter((category): category is SubscriptionPlanCategoryIcon => Boolean(category)) ?? [],
+      }
+    }
 
-          updatePlans((currentPlans) => currentPlans.filter((currentPlan) => currentPlan.id !== plan.id))
-          setEditingPlan((currentPlan) => (currentPlan?.id === plan.id ? null : currentPlan))
-        },
-      }),
-    [],
-  )
+    if (!plan.categoryId) {
+      return {
+        ...plan,
+        categoryIcons: [],
+      }
+    }
+
+    const categoryIcon = categoryIconById.get(plan.categoryId)
+
+    return {
+      ...plan,
+      categoryIcons: categoryIcon ? [categoryIcon] : [],
+    }
+  }
+
+  const displayPlans = subscriptionPlans.map((plan) => withCategoryIcons(plan))
+  const filteredPlans = displayPlans.filter((plan) => {
+    const matchesStatus = statusFilter === 'all' || plan.status === statusFilter
+    const matchesCategory = categoryFilter === 'all' || plan.category === categoryFilter
+
+    return matchesStatus && matchesCategory
+  })
+
+  const columns = getSubscriptionPlanColumns({
+    onEdit: setEditingPlan,
+    onDelete: async (plan) => {
+      const response = await fetch(`/api/subscription-plans/plans/${plan.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        console.error('Unable to delete subscription plan', await response.json().catch(() => null))
+        return
+      }
+
+      updatePlans((currentPlans) => currentPlans.filter((currentPlan) => currentPlan.id !== plan.id))
+      setEditingPlan((currentPlan) => (currentPlan?.id === plan.id ? null : currentPlan))
+    },
+  })
 
   const closeCreateModal = () => {
     const params = new URLSearchParams(searchParams.toString())
@@ -104,7 +145,7 @@ export default function SubscriptionPlansDataTable({
     }
 
     updatePlans((currentPlans) => [
-      createdPlan,
+      withCategoryIcons(createdPlan),
       ...currentPlans,
     ])
     closeCreateModal()
@@ -129,7 +170,7 @@ export default function SubscriptionPlansDataTable({
     }
 
     updatePlans((currentPlans) =>
-      currentPlans.map((plan) => (plan.id === savedPlan.id ? savedPlan : plan)),
+      currentPlans.map((plan) => (plan.id === savedPlan.id ? withCategoryIcons(savedPlan) : plan)),
     )
     setEditingPlan(null)
   }

@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { buildSubscriptionPlanCode } from '@/lib/subscription-plan-code'
 
 import type {
   PlanStatus,
@@ -61,37 +62,52 @@ export function CreatePlanModal({
   onSubmit,
 }: CreatePlanModalProps) {
   const [form, setForm] = useState(defaultForm)
+  const [isCodeDirty, setIsCodeDirty] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
   const defaultPlanTarget = categories[0]?.id
     ? `category:${categories[0].id}`
     : groups[0]?.id
       ? `group:${groups[0].id}`
       : ''
+  const [targetType, targetId] = (form.planTarget || defaultPlanTarget).split(':') as ['category' | 'group', string]
+  const selectedCategory = targetType === 'category'
+    ? categories.find((category) => category.id === targetId)
+    : null
+  const selectedGroup = targetType === 'group'
+    ? groups.find((group) => group.id === targetId)
+    : null
+  const selectedTarget = selectedGroup ?? selectedCategory
+  const generatedCode = buildSubscriptionPlanCode({
+    name: form.name,
+    targetName: selectedTarget?.name,
+    speed: form.speed,
+    price: form.price,
+  })
+
   useEffect(() => {
     if (!open || form.planTarget || !defaultPlanTarget) return
 
     setForm((current) => ({ ...current, planTarget: defaultPlanTarget }))
   }, [defaultPlanTarget, form.planTarget, open])
 
+  useEffect(() => {
+    if (!open || isCodeDirty || form.code === generatedCode) return
+
+    setForm((current) => ({ ...current, code: generatedCode }))
+  }, [form.code, generatedCode, isCodeDirty, open])
+
   const resetForm = () => {
     setForm({
       ...defaultForm,
       planTarget: defaultPlanTarget,
     })
+    setIsCodeDirty(false)
     setShowErrors(false)
   }
 
   const handleSubmit = () => {
-    const cleanCode = form.code.trim().toUpperCase()
+    const cleanCode = (form.code.trim() || generatedCode).toUpperCase()
     const cleanName = form.name.trim()
-    const [targetType, targetId] = form.planTarget.split(':') as ['category' | 'group', string]
-    const selectedCategory = targetType === 'category'
-      ? categories.find((category) => category.id === targetId)
-      : null
-    const selectedGroup = targetType === 'group'
-      ? groups.find((group) => group.id === targetId)
-      : null
-    const selectedTarget = selectedGroup ?? selectedCategory
     const price = Number(form.price)
     const hasErrors = !cleanCode || !cleanName || !selectedTarget || !Number.isFinite(price) || price < 0
 
@@ -151,11 +167,17 @@ export function CreatePlanModal({
               <Input
                 id='plan-code'
                 value={form.code}
-                onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
+                onChange={(event) => {
+                  const nextCode = event.target.value.toUpperCase()
+
+                  setIsCodeDirty(nextCode.trim().length > 0)
+                  setForm((current) => ({ ...current, code: nextCode }))
+                }}
                 placeholder='INT-LITE-25'
                 className='font-mono text-[15px] uppercase sm:text-sm'
                 aria-invalid={showErrors && !form.code.trim()}
               />
+              <p className='text-xs text-muted-foreground'>Auto-generated from the plan details, but you can edit it.</p>
               {showErrors && !form.code.trim() && (
                 <p className='text-xs text-destructive'>Enter a plan code.</p>
               )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -10,203 +10,783 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
-import type { Subscriber } from '../data-table/types'
-
-const plans = ['Basic 50 Mbps', 'Fiber 100 Mbps', 'Fiber 200 Mbps', 'Fiber 300 Mbps']
-const statuses = ['Active', 'Suspended', 'Inactive']
+import type {
+  Subscriber,
+  SubscriberBranchOption,
+  SubscriberCategoryField,
+  SubscriberConnectionType,
+  SubscriberModemOption,
+  SubscriberPlanOption,
+  SubscriberSubscriptionCategoryGroupOption,
+  SubscriberSubscriptionCategoryOption,
+} from '../data-table/types'
 
 type SubscriberFormProps = {
   nextAccountNumber: string
+  subscriber?: Subscriber | null
+  submitLabel?: string
+  categories: SubscriberSubscriptionCategoryOption[]
+  categoryGroups: SubscriberSubscriptionCategoryGroupOption[]
+  plans: SubscriberPlanOption[]
+  branches: SubscriberBranchOption[]
+  modems: SubscriberModemOption[]
+  categoryFields: SubscriberCategoryField[]
   onCancel: () => void
-  onSubmit: (subscriber: Subscriber) => void
+  onSubmit: (formData: FormData) => Promise<boolean>
 }
 
 type FormState = {
-  name: string
+  accountNumber: string
+  firstName: string
+  lastName: string
   phoneNumber: string
-  plan: string
+  email: string
   city: string
   barangay: string
-  status: string
+  streetZone: string
+  branchId: string
+  contractStart: string
+  contractEnd: string
+  subscriptionCategoryId: string
+  subscriptionGroupId: string
+  subscriptionPlanId: string
+  macAddress: string
+  caid: string
+  connectionType: SubscriberConnectionType | ''
+  modemId: string
+  remarks: string
 }
 
-const initialFormState: FormState = {
-  name: '',
-  phoneNumber: '',
-  plan: 'Fiber 100 Mbps',
-  city: '',
-  barangay: '',
-  status: 'Active',
-}
+const NO_MODEM_VALUE = 'no-modem'
+const CATEGORY_VALUE_PREFIX = 'category:'
+const GROUP_VALUE_PREFIX = 'group:'
+
+const createInitialFormState = (nextAccountNumber: string, subscriber?: Subscriber | null): FormState => ({
+  accountNumber: subscriber?.accountNumber ?? nextAccountNumber,
+  firstName: subscriber?.firstName ?? '',
+  lastName: subscriber?.lastName ?? '',
+  phoneNumber: subscriber?.phoneNumber ?? '',
+  email: subscriber?.email ?? '',
+  city: subscriber?.city ?? '',
+  barangay: subscriber?.barangay ?? '',
+  streetZone: subscriber?.streetZone ?? '',
+  branchId: subscriber?.branchId ?? '',
+  contractStart: subscriber?.contractStart ?? '',
+  contractEnd: subscriber?.contractEnd ?? '',
+  subscriptionCategoryId: subscriber?.subscriptionCategoryId ?? '',
+  subscriptionGroupId: subscriber?.subscriptionGroupId ?? '',
+  subscriptionPlanId: subscriber?.subscriptionPlanId ?? '',
+  macAddress: subscriber?.macAddress ?? '',
+  caid: subscriber?.caid ?? '',
+  connectionType: subscriber?.connectionType ?? '',
+  modemId: subscriber?.modemId ?? '',
+  remarks: subscriber?.remarks ?? '',
+})
 
 export function SubscriberForm({
   nextAccountNumber,
+  subscriber,
+  submitLabel = 'Add Subscriber',
+  categories,
+  categoryGroups,
+  plans,
+  branches,
+  modems,
+  categoryFields,
   onCancel,
   onSubmit,
 }: SubscriberFormProps) {
-  const [form, setForm] = useState<FormState>(initialFormState)
+  const [form, setForm] = useState<FormState>(() => createInitialFormState(nextAccountNumber, subscriber))
+  const [categoryDetails, setCategoryDetails] = useState<Record<string, string>>(
+    () => subscriber?.subscriptionDetails ?? {},
+  )
+  const [contractPicture, setContractPicture] = useState<File | null>(null)
   const [showErrors, setShowErrors] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const subscriptionCategoryValue = form.subscriptionGroupId
+    ? `${GROUP_VALUE_PREFIX}${form.subscriptionGroupId}`
+    : form.subscriptionCategoryId
+      ? `${CATEGORY_VALUE_PREFIX}${form.subscriptionCategoryId}`
+      : ''
 
+  const activeBranches = useMemo(
+    () => branches.filter((branch) => branch.status === 'Active'),
+    [branches],
+  )
+  const activeModems = useMemo(
+    () => modems.filter((modem) => modem.status === 'Active'),
+    [modems],
+  )
+  const activePlans = useMemo(
+    () => plans.filter((plan) => plan.status === 'Active'),
+    [plans],
+  )
+  const categoryGroupSections = useMemo(() => {
+    const categoryById = new Map(categories.map((category) => [category.id, category]))
+    const sections = categoryGroups
+      .map((group) => {
+        const groupCategories = group.categoryIds
+          .map((categoryId) => categoryById.get(categoryId))
+          .filter((category): category is SubscriberSubscriptionCategoryOption => Boolean(category))
+
+        return {
+          ...group,
+          categories: groupCategories,
+        }
+      })
+      .filter((group) => group.categories.length > 0)
+
+    return { sections, singleCategories: categories }
+  }, [categories, categoryGroups])
+  const selectedCategoryGroupIds = useMemo(
+    () =>
+      form.subscriptionGroupId
+        ? [form.subscriptionGroupId]
+        : categoryGroups
+            .filter((group) => group.categoryIds.includes(form.subscriptionCategoryId))
+            .map((group) => group.id),
+    [categoryGroups, form.subscriptionCategoryId, form.subscriptionGroupId],
+  )
+  const selectedCategoryIds = useMemo(
+    () => {
+      if (form.subscriptionGroupId) {
+        return categoryGroups.find((group) => group.id === form.subscriptionGroupId)?.categoryIds ?? []
+      }
+
+      return form.subscriptionCategoryId ? [form.subscriptionCategoryId] : []
+    },
+    [categoryGroups, form.subscriptionCategoryId, form.subscriptionGroupId],
+  )
+  const selectedCategoryFields = useMemo(
+    () => {
+      const categoryNameById = new Map(categories.map((category) => [category.id, category.name]))
+
+      return categoryFields
+        .filter((field) => selectedCategoryIds.includes(field.categoryId))
+        .map((field) => ({
+          ...field,
+          detailKey: form.subscriptionGroupId ? `${field.categoryId}.${field.key}` : field.key,
+          displayLabel: form.subscriptionGroupId
+            ? `${categoryNameById.get(field.categoryId) ?? 'Category'} - ${field.label}`
+            : field.label,
+        }))
+        .sort((first, second) => {
+          const categorySort = selectedCategoryIds.indexOf(first.categoryId) - selectedCategoryIds.indexOf(second.categoryId)
+          return categorySort === 0 ? first.sortOrder - second.sortOrder : categorySort
+        })
+    },
+    [categories, categoryFields, form.subscriptionGroupId, selectedCategoryIds],
+  )
+  const availablePlans = useMemo(
+    () =>
+      activePlans.filter(
+        (plan) =>
+          selectedCategoryIds.length === 0 ||
+          (plan.categoryId ? selectedCategoryIds.includes(plan.categoryId) : false) ||
+          (plan.groupId ? selectedCategoryGroupIds.includes(plan.groupId) : false) ||
+          plan.categoryId === null,
+      ),
+    [activePlans, selectedCategoryGroupIds, selectedCategoryIds],
+  )
+
+  useEffect(() => {
+    setForm(createInitialFormState(nextAccountNumber, subscriber))
+    setCategoryDetails(subscriber?.subscriptionDetails ?? {})
+    setContractPicture(null)
+    setShowErrors(false)
+  }, [nextAccountNumber, subscriber])
+
+  useEffect(() => {
+    setForm((current) =>
+      current.subscriptionPlanId && !availablePlans.some((plan) => plan.id === current.subscriptionPlanId)
+        ? {
+            ...current,
+            subscriptionPlanId: '',
+          }
+        : current,
+    )
+  }, [availablePlans])
+
+  useEffect(() => {
+    setCategoryDetails((currentDetails) =>
+      selectedCategoryFields.reduce<Record<string, string>>((details, field) => {
+        details[field.detailKey] = currentDetails[field.detailKey] ?? ''
+        return details
+      }, {}),
+    )
+  }, [selectedCategoryFields])
+
+  const requiredDynamicFieldMissing = selectedCategoryFields.some(
+    (field) => field.required && !categoryDetails[field.detailKey]?.trim(),
+  )
   const hasErrors =
-    !form.name.trim() ||
+    !form.accountNumber.trim() ||
+    !form.firstName.trim() ||
+    !form.lastName.trim() ||
     !form.phoneNumber.trim() ||
-    !form.plan ||
     !form.city.trim() ||
     !form.barangay.trim() ||
-    !form.status
+    !form.branchId ||
+    (!form.subscriptionCategoryId && !form.subscriptionGroupId) ||
+    !form.subscriptionPlanId ||
+    !form.connectionType ||
+    requiredDynamicFieldMissing
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setShowErrors(true)
+  const updateSubscriptionCategory = (value: string) => {
+    if (value.startsWith(GROUP_VALUE_PREFIX)) {
+      setForm((current) => ({
+        ...current,
+        subscriptionCategoryId: '',
+        subscriptionGroupId: value.slice(GROUP_VALUE_PREFIX.length),
+      }))
+      return
+    }
 
-    if (hasErrors) return
+    setForm((current) => ({
+      ...current,
+      subscriptionCategoryId: value.startsWith(CATEGORY_VALUE_PREFIX)
+        ? value.slice(CATEGORY_VALUE_PREFIX.length)
+        : value,
+      subscriptionGroupId: '',
+    }))
+  }
 
-    onSubmit({
-      id: nextAccountNumber,
-      accountNumber: nextAccountNumber,
-      name: form.name.trim(),
-      phoneNumber: form.phoneNumber.trim(),
-      plan: form.plan,
-      city: form.city.trim(),
-      barangay: form.barangay.trim(),
-      status: form.status,
-    })
+  const updateCategoryDetail = (key: string, value: string) => {
+    setCategoryDetails((current) => ({
+      ...current,
+      [key]: value,
+    }))
+  }
 
-    setForm(initialFormState)
+  const resetForm = () => {
+    setForm(createInitialFormState(nextAccountNumber, subscriber))
+    setCategoryDetails(subscriber?.subscriptionDetails ?? {})
+    setContractPicture(null)
     setShowErrors(false)
   }
 
+  const handleCancel = () => {
+    resetForm()
+    onCancel()
+  }
+
+  const submitSubscriber = async (proceedToInstallation: boolean) => {
+    setShowErrors(true)
+
+    if (hasErrors || isSubmitting) return
+
+    const formData = new FormData()
+    Object.entries(form).forEach(([key, value]) => {
+      formData.append(key, value)
+    })
+    formData.set('modemId', form.modemId === NO_MODEM_VALUE ? '' : form.modemId)
+    formData.append('subscriptionDetails', JSON.stringify(categoryDetails))
+    if (proceedToInstallation) {
+      formData.append('proceedToInstallation', '1')
+    }
+    if (contractPicture) {
+      formData.append('contractPicture', contractPicture)
+    }
+
+    setIsSubmitting(true)
+    const wasCreated = await onSubmit(formData)
+    setIsSubmitting(false)
+
+    if (wasCreated) resetForm()
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await submitSubscriber(false)
+  }
+
+  const renderDynamicField = (
+    field: SubscriberCategoryField & { detailKey: string; displayLabel: string },
+  ) => {
+    const value = categoryDetails[field.detailKey] ?? ''
+    const fieldId = `subscriber-category-field-${field.id}`
+    const invalid = showErrors && field.required && !value.trim()
+
+    if (field.type === 'textarea') {
+      return (
+        <div key={field.id} className='flex flex-col gap-1.5'>
+          <label className='text-sm font-medium' htmlFor={fieldId}>
+            {field.displayLabel}
+          </label>
+          <textarea
+            id={fieldId}
+            value={value}
+            onChange={(event) => updateCategoryDetail(field.detailKey, event.target.value)}
+            placeholder={field.placeholder}
+            aria-invalid={invalid}
+            className={cn(
+              'min-h-24 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30',
+            )}
+          />
+          {invalid && <p className='text-xs text-destructive'>Enter {field.label.toLowerCase()}.</p>}
+        </div>
+      )
+    }
+
+    if (field.type === 'select') {
+      return (
+        <div key={field.id} className='flex flex-col gap-1.5'>
+          <label className='text-sm font-medium' htmlFor={fieldId}>
+            {field.displayLabel}
+          </label>
+          <Select value={value} onValueChange={(nextValue) => updateCategoryDetail(field.detailKey, nextValue)}>
+            <SelectTrigger id={fieldId} className='w-full' aria-invalid={invalid}>
+              <SelectValue placeholder={field.placeholder || `Select ${field.label}`} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {field.options.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          {invalid && <p className='text-xs text-destructive'>Select {field.label.toLowerCase()}.</p>}
+        </div>
+      )
+    }
+
+    return (
+      <div key={field.id} className='flex flex-col gap-1.5'>
+        <label className='text-sm font-medium' htmlFor={fieldId}>
+          {field.displayLabel}
+        </label>
+        <Input
+          id={fieldId}
+          type={field.type}
+          value={value}
+          onChange={(event) => updateCategoryDetail(field.detailKey, event.target.value)}
+          placeholder={field.placeholder}
+          aria-invalid={invalid}
+        />
+        {invalid && <p className='text-xs text-destructive'>Enter {field.label.toLowerCase()}.</p>}
+      </div>
+    )
+  }
+
   return (
-    <form className='flex min-h-0 flex-col' onSubmit={handleSubmit}>
-      <div className='grid max-h-[min(68vh,620px)] gap-4 overflow-y-auto px-4 pb-4 sm:grid-cols-2'>
-        <div className='flex flex-col gap-1.5 sm:col-span-2'>
-          <label className='text-sm font-medium' htmlFor='subscriber-account-number'>
-            Account Number
-          </label>
-          <Input
-            id='subscriber-account-number'
-            value={nextAccountNumber}
-            readOnly
-            className='font-mono'
-          />
-        </div>
+    <form
+      className='flex min-h-0 flex-1 flex-col [&_[data-slot=input]]:border-muted-foreground/25 [&_[data-slot=input]]:bg-muted/35 [&_[data-slot=input]]:shadow-sm [&_[data-slot=select-trigger]]:border-muted-foreground/25 [&_[data-slot=select-trigger]]:bg-muted/35 [&_[data-slot=select-trigger]]:shadow-sm [&_textarea]:border-muted-foreground/25 [&_textarea]:bg-muted/35 [&_textarea]:shadow-sm dark:[&_[data-slot=input]]:border-input dark:[&_[data-slot=input]]:bg-input/30 dark:[&_[data-slot=select-trigger]]:border-input dark:[&_[data-slot=select-trigger]]:bg-input/30 dark:[&_textarea]:border-input dark:[&_textarea]:bg-input/30'
+      onSubmit={handleSubmit}
+    >
+      <div className='min-h-0 flex-1 overflow-y-auto'>
+        <div className='mx-auto grid w-full max-w-6xl gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]'>
+          <div className='min-w-0 space-y-6'>
+            <section className='space-y-4 border-b pb-5'>
+              <div className='grid gap-4 sm:grid-cols-2'>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-account-number'>
+                    Account Number
+                  </label>
+                  <Input
+                    id='subscriber-account-number'
+                    value={form.accountNumber}
+                    onChange={(event) => updateField('accountNumber', event.target.value)}
+                    className='font-mono'
+                    aria-invalid={showErrors && !form.accountNumber.trim()}
+                  />
+                  {showErrors && !form.accountNumber.trim() && (
+                    <p className='text-xs text-destructive'>Enter an account number.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-phone'>
+                    Phone Number
+                  </label>
+                  <Input
+                    id='subscriber-phone'
+                    value={form.phoneNumber}
+                    onChange={(event) => updateField('phoneNumber', event.target.value)}
+                    aria-invalid={showErrors && !form.phoneNumber.trim()}
+                  />
+                  {showErrors && !form.phoneNumber.trim() && (
+                    <p className='text-xs text-destructive'>Enter a phone number.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-first-name'>
+                    First Name
+                  </label>
+                  <Input
+                    id='subscriber-first-name'
+                    value={form.firstName}
+                    onChange={(event) => updateField('firstName', event.target.value)}
+                    aria-invalid={showErrors && !form.firstName.trim()}
+                  />
+                  {showErrors && !form.firstName.trim() && (
+                    <p className='text-xs text-destructive'>Enter the first name.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-last-name'>
+                    Last Name
+                  </label>
+                  <Input
+                    id='subscriber-last-name'
+                    value={form.lastName}
+                    onChange={(event) => updateField('lastName', event.target.value)}
+                    aria-invalid={showErrors && !form.lastName.trim()}
+                  />
+                  {showErrors && !form.lastName.trim() && (
+                    <p className='text-xs text-destructive'>Enter the last name.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5 sm:col-span-2'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-email'>
+                    Email
+                  </label>
+                  <Input
+                    id='subscriber-email'
+                    type='email'
+                    value={form.email}
+                    onChange={(event) => updateField('email', event.target.value)}
+                  />
+                </div>
+              </div>
+            </section>
 
-        <div className='flex flex-col gap-1.5 sm:col-span-2'>
-          <label className='text-sm font-medium' htmlFor='subscriber-name'>
-            Subscriber Name
-          </label>
-          <Input
-            id='subscriber-name'
-            value={form.name}
-            onChange={(event) => updateField('name', event.target.value)}
-            aria-invalid={showErrors && !form.name.trim()}
-          />
-          {showErrors && !form.name.trim() && (
-            <p className='text-xs text-destructive'>Enter the subscriber name.</p>
-          )}
-        </div>
+            <section className='space-y-4 border-b pb-5'>
+              <div className='grid gap-4 sm:grid-cols-3'>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-city'>
+                    City
+                  </label>
+                  <Input
+                    id='subscriber-city'
+                    value={form.city}
+                    onChange={(event) => updateField('city', event.target.value)}
+                    aria-invalid={showErrors && !form.city.trim()}
+                  />
+                  {showErrors && !form.city.trim() && (
+                    <p className='text-xs text-destructive'>Enter the city.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-barangay'>
+                    Barangay
+                  </label>
+                  <Input
+                    id='subscriber-barangay'
+                    value={form.barangay}
+                    onChange={(event) => updateField('barangay', event.target.value)}
+                    aria-invalid={showErrors && !form.barangay.trim()}
+                  />
+                  {showErrors && !form.barangay.trim() && (
+                    <p className='text-xs text-destructive'>Enter the barangay.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-street-zone'>
+                    Street/Zone
+                  </label>
+                  <Input
+                    id='subscriber-street-zone'
+                    value={form.streetZone}
+                    onChange={(event) => updateField('streetZone', event.target.value)}
+                  />
+                </div>
+              </div>
+            </section>
 
-        <div className='flex flex-col gap-1.5'>
-          <label className='text-sm font-medium' htmlFor='subscriber-phone'>
-            Phone Number
-          </label>
-          <Input
-            id='subscriber-phone'
-            value={form.phoneNumber}
-            onChange={(event) => updateField('phoneNumber', event.target.value)}
-            aria-invalid={showErrors && !form.phoneNumber.trim()}
-          />
-          {showErrors && !form.phoneNumber.trim() && (
-            <p className='text-xs text-destructive'>Enter a phone number.</p>
-          )}
-        </div>
+            <section className='space-y-4 border-b pb-5'>
+              <div className='grid gap-4 sm:grid-cols-2'>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-branch'>
+                    Branch
+                  </label>
+                  <Select value={form.branchId} onValueChange={(value) => updateField('branchId', value)}>
+                    <SelectTrigger id='subscriber-branch' className='w-full' aria-invalid={showErrors && !form.branchId}>
+                      <SelectValue placeholder='Select branch' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {activeBranches.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  {showErrors && !form.branchId && (
+                    <p className='text-xs text-destructive'>Select a branch.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-connection-type'>
+                    Connection Type
+                  </label>
+                  <Select
+                    value={form.connectionType}
+                    onValueChange={(value) => updateField('connectionType', value)}
+                  >
+                    <SelectTrigger
+                      id='subscriber-connection-type'
+                      className='w-full'
+                      aria-invalid={showErrors && !form.connectionType}
+                    >
+                      <SelectValue placeholder='Select connection' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value='FTTH'>FTTH</SelectItem>
+                        <SelectItem value='COAX'>COAX</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  {showErrors && !form.connectionType && (
+                    <p className='text-xs text-destructive'>Select a connection type.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-contract-start'>
+                    Contract Start
+                  </label>
+                  <Input
+                    id='subscriber-contract-start'
+                    type='date'
+                    value={form.contractStart}
+                    onChange={(event) => updateField('contractStart', event.target.value)}
+                  />
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-contract-end'>
+                    Contract End
+                  </label>
+                  <Input
+                    id='subscriber-contract-end'
+                    type='date'
+                    value={form.contractEnd}
+                    onChange={(event) => updateField('contractEnd', event.target.value)}
+                  />
+                </div>
+              </div>
+            </section>
 
-        <div className='flex flex-col gap-1.5'>
-          <label className='text-sm font-medium' htmlFor='subscriber-plan'>
-            Plan
-          </label>
-          <Select value={form.plan} onValueChange={(value) => updateField('plan', value)}>
-            <SelectTrigger id='subscriber-plan' className='w-full'>
-              <SelectValue placeholder='Select plan' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {plans.map((plan) => (
-                  <SelectItem key={plan} value={plan}>
-                    {plan}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
+            <section className='space-y-4'>
+              <div className='grid gap-4 sm:grid-cols-2'>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-mac-address'>
+                    MAC Address
+                  </label>
+                  <Input
+                    id='subscriber-mac-address'
+                    value={form.macAddress}
+                    onChange={(event) => updateField('macAddress', event.target.value)}
+                    className='font-mono uppercase'
+                  />
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-caid'>
+                    CAID
+                  </label>
+                  <Input
+                    id='subscriber-caid'
+                    value={form.caid}
+                    onChange={(event) => updateField('caid', event.target.value)}
+                    className='font-mono'
+                  />
+                </div>
+                <div className='flex flex-col gap-1.5 sm:col-span-2'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-modem-type'>
+                    Modem Type
+                  </label>
+                  <Select
+                    value={form.modemId || NO_MODEM_VALUE}
+                    onValueChange={(value) => updateField('modemId', value === NO_MODEM_VALUE ? '' : value)}
+                  >
+                    <SelectTrigger id='subscriber-modem-type' className='w-full'>
+                      <SelectValue placeholder='Select modem type' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value={NO_MODEM_VALUE}>Unassigned</SelectItem>
+                        {activeModems.map((modem) => (
+                          <SelectItem key={modem.id} value={modem.id}>
+                            {modem.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
+          </div>
 
-        <div className='flex flex-col gap-1.5'>
-          <label className='text-sm font-medium' htmlFor='subscriber-city'>
-            City
-          </label>
-          <Input
-            id='subscriber-city'
-            value={form.city}
-            onChange={(event) => updateField('city', event.target.value)}
-            aria-invalid={showErrors && !form.city.trim()}
-          />
-          {showErrors && !form.city.trim() && (
-            <p className='text-xs text-destructive'>Enter the city.</p>
-          )}
-        </div>
+          <div className='min-w-0 space-y-6'>
+            <section className='space-y-4 border-b pb-5'>
+              <div className='grid gap-4'>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-subscription-category'>
+                    Subscription Category
+                  </label>
+                  <Select
+                    value={subscriptionCategoryValue}
+                    onValueChange={updateSubscriptionCategory}
+                  >
+                    <SelectTrigger
+                      id='subscriber-subscription-category'
+                      className='w-full'
+                      aria-invalid={showErrors && !form.subscriptionCategoryId && !form.subscriptionGroupId}
+                    >
+                      <SelectValue placeholder='Select category' />
+                    </SelectTrigger>
+                    <SelectContent className='w-[var(--radix-select-trigger-width)] min-w-[360px]'>
+                      {categoryGroupSections.sections.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase'>
+                            Group Categories
+                          </SelectLabel>
+                          {categoryGroupSections.sections.map((group) => (
+                            <SelectItem
+                              key={group.id}
+                              value={`${GROUP_VALUE_PREFIX}${group.id}`}
+                              className='min-h-10 py-2'
+                            >
+                              <span className='flex min-w-0 flex-1 items-center justify-between gap-3'>
+                                <span className='truncate'>{group.name}</span>
+                                <span className='truncate text-xs text-muted-foreground'>
+                                  {group.categories.map((category) => category.name).join(' + ')}
+                                </span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {categoryGroupSections.singleCategories.length > 0 && (
+                        <SelectGroup>
+                          {categoryGroupSections.sections.length > 0 && (
+                            <SelectLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase'>
+                              Single Categories
+                            </SelectLabel>
+                          )}
+                          {categoryGroupSections.singleCategories.map((category) => (
+                            <SelectItem
+                              key={category.id}
+                              value={`${CATEGORY_VALUE_PREFIX}${category.id}`}
+                              className='min-h-10 py-2'
+                            >
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {showErrors && !form.subscriptionCategoryId && !form.subscriptionGroupId && (
+                    <p className='text-xs text-destructive'>Select a subscription category.</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-subscription-plan'>
+                    Subscription Plan
+                  </label>
+                  <Select
+                    value={form.subscriptionPlanId}
+                    onValueChange={(value) => updateField('subscriptionPlanId', value)}
+                    disabled={availablePlans.length === 0}
+                  >
+                    <SelectTrigger
+                      id='subscriber-subscription-plan'
+                      className='w-full'
+                      aria-invalid={showErrors && !form.subscriptionPlanId}
+                    >
+                      <SelectValue placeholder='Select plan' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {availablePlans.map((plan) => (
+                          <SelectItem key={plan.id} value={plan.id}>
+                            {plan.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  {showErrors && !form.subscriptionPlanId && (
+                    <p className='text-xs text-destructive'>Select a subscription plan.</p>
+                  )}
+                </div>
+              </div>
+            </section>
 
-        <div className='flex flex-col gap-1.5'>
-          <label className='text-sm font-medium' htmlFor='subscriber-barangay'>
-            Barangay
-          </label>
-          <Input
-            id='subscriber-barangay'
-            value={form.barangay}
-            onChange={(event) => updateField('barangay', event.target.value)}
-            aria-invalid={showErrors && !form.barangay.trim()}
-          />
-          {showErrors && !form.barangay.trim() && (
-            <p className='text-xs text-destructive'>Enter the barangay.</p>
-          )}
-        </div>
+            {selectedCategoryFields.length > 0 && (
+              <section className='space-y-4 border-b pb-5'>
+                <div className='grid gap-4'>
+                  {selectedCategoryFields.map(renderDynamicField)}
+                </div>
+              </section>
+            )}
 
-        <div className='flex flex-col gap-1.5 sm:col-span-2'>
-          <label className='text-sm font-medium' htmlFor='subscriber-status'>
-            Status
-          </label>
-          <Select value={form.status} onValueChange={(value) => updateField('status', value)}>
-            <SelectTrigger id='subscriber-status' className='w-full'>
-              <SelectValue placeholder='Select status' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {statuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+            <section className='space-y-4'>
+              <div className='grid gap-4'>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-contract-picture'>
+                    Contract Picture
+                  </label>
+                  <Input
+                    id='subscriber-contract-picture'
+                    type='file'
+                    accept='image/*'
+                    onChange={(event) => setContractPicture(event.target.files?.[0] ?? null)}
+                  />
+                  {contractPicture && (
+                    <p className='truncate text-xs text-muted-foreground'>{contractPicture.name}</p>
+                  )}
+                </div>
+                <div className='flex flex-col gap-1.5'>
+                  <label className='text-sm font-medium' htmlFor='subscriber-remarks'>
+                    Remarks
+                  </label>
+                  <textarea
+                    id='subscriber-remarks'
+                    value={form.remarks}
+                    onChange={(event) => updateField('remarks', event.target.value)}
+                    className='min-h-28 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
 
-      <div className='flex justify-end gap-2 border-t p-4'>
-        <Button type='button' variant='outline' size='sm' onClick={onCancel}>
+      <div className='flex shrink-0 justify-end gap-2 border-t bg-background p-4 sm:px-6'>
+        <Button type='button' variant='outline' size='sm' onClick={handleCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type='submit' size='sm'>
-          Add Subscriber
+        <Button type='submit' size='sm' disabled={isSubmitting}>
+          {isSubmitting ? 'Saving...' : submitLabel}
         </Button>
+        {!subscriber && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => submitSubscriber(true)}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Saving...' : 'Proceed to Installation'}
+          </Button>
+        )}
       </div>
     </form>
   )

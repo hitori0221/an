@@ -74,7 +74,7 @@ export const jobOrderColumns: ColumnDef<JobOrder>[] = [
             <ChevronDownIcon className='opacity-60' aria-hidden='true' />
           )}
         </Button>
-        <span className='font-mono text-[13px] leading-tight text-foreground'>{row.getValue('ticketNumber')}</span>
+        <span className='text-[13px] leading-tight text-foreground'>{row.getValue('ticketNumber')}</span>
       </div>
     ),
   },
@@ -101,7 +101,7 @@ export const jobOrderColumns: ColumnDef<JobOrder>[] = [
       return (
         <Badge
           variant='outline'
-          className={cn('flex h-6 items-center px-2 py-0.5 font-medium', priorityStyles[priority])}
+          className={cn('inline-flex h-6 items-center px-2 py-0.5 font-medium', priorityStyles[priority])}
         >
           {priority}
         </Badge>
@@ -124,7 +124,7 @@ export const jobOrderColumns: ColumnDef<JobOrder>[] = [
       return (
         <Badge
           variant='outline'
-          className={cn('flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
+          className={cn('inline-flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
         >
           <span className='size-1.5 rounded-full bg-current' aria-hidden='true' />
           {status}

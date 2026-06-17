@@ -5,14 +5,26 @@ import {
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
   Ellipsis as MoreHorizontal,
+  Pencil,
+  SealCheck,
+  TrashBin,
 } from '@gravity-ui/icons'
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/animate-ui/components/radix/dropdown-menu'
 import { SortableColumnHeader } from '@/components/data-table/shared/sortable-column-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import type { Installation } from './types'
+import type { Installation, InstallationStatus } from './types'
 
 export const installationColumnClassNames: Record<string, string> = {
   accountNumber: 'w-[19%] min-w-[178px]',
@@ -34,7 +46,17 @@ const statusStyles: Record<string, string> = {
   Cancelled: 'border-muted-foreground/20 bg-muted text-muted-foreground',
 }
 
-export const installationColumns: ColumnDef<Installation>[] = [
+type InstallationColumnActions = {
+  onEdit: (installation: Installation) => void
+  onStatusChange: (installation: Installation, status: InstallationStatus) => void
+  onDelete: (installation: Installation) => void
+}
+
+export const getInstallationColumns = ({
+  onEdit,
+  onStatusChange,
+  onDelete,
+}: InstallationColumnActions): ColumnDef<Installation>[] => [
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Account Number' />,
     accessorKey: 'accountNumber',
@@ -58,7 +80,7 @@ export const installationColumns: ColumnDef<Installation>[] = [
             <ChevronDownIcon className='opacity-60' aria-hidden='true' />
           )}
         </Button>
-        <span className='font-mono text-[13px] leading-tight text-foreground'>{row.getValue('accountNumber')}</span>
+        <span className='text-[13px] leading-tight text-foreground'>{row.getValue('accountNumber')}</span>
       </div>
     ),
   },
@@ -109,7 +131,7 @@ export const installationColumns: ColumnDef<Installation>[] = [
       return (
         <Badge
           variant='outline'
-          className={cn('flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
+          className={cn('inline-flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
         >
           <span className='size-1.5 rounded-full bg-current' aria-hidden='true' />
           {status}
@@ -123,14 +145,40 @@ export const installationColumns: ColumnDef<Installation>[] = [
     header: () => <div className='text-right'>Action</div>,
     cell: ({ row }) => (
       <div className='flex justify-end'>
-        <Button
-          type='button'
-          variant='ghost'
-          size='icon-sm'
-          aria-label={`Open actions for ${row.original.name}`}
-        >
-          <MoreHorizontal aria-hidden='true' />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon-sm'
+              aria-label={`Open actions for ${row.original.name}`}
+            >
+              <MoreHorizontal aria-hidden='true' />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='end' className='w-48'>
+            <DropdownMenuLabel className='truncate'>{row.original.accountNumber}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onSelect={() => onEdit(row.original)}>
+                <Pencil />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => onStatusChange(row.original, 'Installed')}
+                disabled={row.original.status === 'Installed'}
+              >
+                <SealCheck />
+                Mark Installed
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant='destructive' onSelect={() => onDelete(row.original)}>
+              <TrashBin />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     ),
   },

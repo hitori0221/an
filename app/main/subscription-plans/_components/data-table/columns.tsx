@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import type { ColumnDef } from '@tanstack/react-table'
 import {
   Ellipsis as MoreHorizontal,
@@ -21,12 +22,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import type { PlanStatus, SubscriptionPlan } from './types'
+import type { PlanStatus, SubscriptionPlan, SubscriptionPlanCategoryIcon } from './types'
 
 export const subscriptionPlanColumnClassNames: Record<string, string> = {
   code: 'w-[14%] min-w-[124px]',
   name: 'w-[23%] min-w-[180px]',
-  category: 'w-[13%] min-w-[118px]',
+  category: 'w-[15%] min-w-[154px]',
   billingType: 'w-[13%] min-w-[118px]',
   service: 'w-[18%] min-w-[150px]',
   price: 'w-[11%] min-w-[98px]',
@@ -47,6 +48,79 @@ const currencyFormatter = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
+const visibleCategoryIconCount = 4
+
+const getCategoryInitials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase() || '?'
+
+function CategoryIcon({
+  category,
+  index,
+}: {
+  category: SubscriptionPlanCategoryIcon
+  index: number
+}) {
+  return (
+    <span
+      className={cn(
+        'relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-[10px] font-semibold leading-none text-muted-foreground shadow-xs',
+        index > 0 && '-ml-2',
+      )}
+      title={category.name}
+    >
+      {category.iconDataUrl ? (
+        <Image
+          src={category.iconDataUrl}
+          alt=''
+          fill
+          unoptimized
+          sizes='28px'
+          className='scale-125 object-cover'
+        />
+      ) : (
+        getCategoryInitials(category.name)
+      )}
+    </span>
+  )
+}
+
+function CategoryBadge({ plan }: { plan: SubscriptionPlan }) {
+  const categoryIcons =
+    plan.categoryIcons && plan.categoryIcons.length > 0
+      ? plan.categoryIcons
+      : [
+          {
+            id: plan.categoryId ?? plan.groupId ?? plan.id,
+            name: plan.category,
+            iconDataUrl: null,
+          },
+        ]
+  const visibleIcons = categoryIcons.slice(0, visibleCategoryIconCount)
+  const hiddenIconCount = Math.max(categoryIcons.length - visibleIcons.length, 0)
+
+  return (
+    <span className='inline-flex max-w-full items-center gap-2 text-xs font-medium leading-tight text-foreground'>
+      <span className='flex min-w-0 shrink-0 items-center' aria-hidden='true'>
+        {visibleIcons.map((category, index) => (
+          <CategoryIcon key={category.id} category={category} index={index} />
+        ))}
+        {hiddenIconCount > 0 ? (
+          <span className='-ml-2 flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted px-1 text-[10px] font-semibold leading-none text-muted-foreground shadow-xs'>
+            +{hiddenIconCount}
+          </span>
+        ) : null}
+      </span>
+      <span className='truncate'>{plan.category}</span>
+    </span>
+  )
+}
+
 type SubscriptionPlanColumnActions = {
   onEdit: (plan: SubscriptionPlan) => void
   onDelete: (plan: SubscriptionPlan) => void
@@ -60,7 +134,7 @@ export const getSubscriptionPlanColumns = ({
     header: ({ column }) => <SortableColumnHeader column={column} title='Plan Code' />,
     accessorKey: 'code',
     cell: ({ row }) => (
-      <span className='block truncate font-mono text-[13px] leading-tight text-foreground'>
+      <span className='block truncate text-[13px] leading-tight text-foreground'>
         {row.getValue('code')}
       </span>
     ),
@@ -78,11 +152,7 @@ export const getSubscriptionPlanColumns = ({
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Category' />,
     accessorKey: 'category',
-    cell: ({ row }) => (
-      <span className='inline-flex h-6 items-center rounded-md bg-muted/70 px-2 text-xs font-medium leading-tight text-foreground'>
-        {row.getValue('category')}
-      </span>
-    ),
+    cell: ({ row }) => <CategoryBadge plan={row.original} />,
   },
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Billing' />,
@@ -127,7 +197,7 @@ export const getSubscriptionPlanColumns = ({
       return (
         <Badge
           variant='outline'
-          className={cn('flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
+          className={cn('inline-flex h-6 items-center gap-1.5 px-2 py-0.5 font-medium', statusStyles[status])}
         >
           <span className='size-1.5 rounded-full bg-current' aria-hidden='true' />
           {status}

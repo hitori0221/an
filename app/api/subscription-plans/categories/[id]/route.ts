@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import {
   deleteSubscriptionPlanCategory,
-  renameSubscriptionPlanCategory,
+  updateSubscriptionPlanCategory,
 } from '@/lib/subscription-plans'
 
 type RouteContext = {
@@ -16,14 +16,17 @@ export const dynamic = 'force-dynamic'
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params
-    const body = (await request.json()) as { name?: string }
+    const body = (await request.json()) as { name?: string; iconDataUrl?: string | null }
     const name = body.name?.trim()
 
     if (!name) {
       return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
     }
 
-    const category = await renameSubscriptionPlanCategory(id, name)
+    const category = await updateSubscriptionPlanCategory(id, {
+      name,
+      iconDataUrl: body.iconDataUrl,
+    })
     return NextResponse.json({ category })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to rename category'
@@ -41,4 +44,3 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
-

@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { logout } from '@/app/login/actions';
-import { subscriptionPlans } from '@/app/main/subscription-plans/_components/data-table/data';
+import type { ServiceRequestCategory } from '@/lib/subscription-plans';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -84,10 +85,6 @@ import {
 } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-const subscriptionPlanCategories = Array.from(
-  new Set(subscriptionPlans.map((plan) => plan.category)),
-);
-
 const DATA = {
   workspaces: [
     {
@@ -163,22 +160,21 @@ const DATA = {
       icon: Tag,
     },
     {
+      title: 'Manage Modem',
+      url: '/main/modems',
+      icon: Settings2,
+    },
+    {
       title: 'Manage Branch',
       url: '/main/branches',
       icon: GearBranches,
     },
   ],
-  serviceRequests: subscriptionPlanCategories.map((category) => ({
-    name: category,
-    url: `/main/service-request?category=${encodeURIComponent(category)}`,
-    icon: Frame,
-    pendingCount:
-      category === 'Internet' ? 12 : category === 'Cable' ? 4 : category === 'Combo' ? 7 : 2,
-  })),
 };
 
 interface RadixSidebarDemoProps {
   children?: React.ReactNode;
+  serviceRequestCategories: ServiceRequestCategory[];
   user: {
     name: string;
     email: string;
@@ -198,17 +194,20 @@ type NavItem = {
   }[];
 };
 
-const SUBSCRIBER_STATUS_FILTERS = ['Active', 'Inactive', 'Suspended'];
+const SUBSCRIBER_STATUS_FILTERS = ['Active', 'Inactive', 'Pending'];
 const SUBSCRIBER_PLAN_FILTERS = ['Basic 50 Mbps', 'Fiber 100 Mbps', 'Fiber 200 Mbps', 'Fiber 300 Mbps'];
 const SUBSCRIPTION_PLAN_STATUS_FILTERS = ['Active', 'Draft', 'Archived'];
-const SUBSCRIPTION_PLAN_CATEGORY_FILTERS = subscriptionPlanCategories;
 const WORKSPACE_DEFAULT_ROUTES: Record<string, string> = {
   Operations: '/main/overview',
   'Billing Management': '/main/payments',
   Administrator: '/main/subscription-plans',
 };
 
-export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
+export const RadixSidebarDemo = ({
+  children,
+  serviceRequestCategories,
+  user,
+}: RadixSidebarDemoProps) => {
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const router = useRouter();
@@ -234,8 +233,14 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
         ? DATA.adminNavMain
         : DATA.navMain;
   const activeProjects =
-    activeWorkspace.plan === 'Operations' ? DATA.serviceRequests : [];
-  const activeNavItem = activeNavMain.find((item) => pathname === item.url);
+    activeWorkspace.plan === 'Operations' ? serviceRequestCategories : [];
+  const isSubscriberDetailsPage = pathname.startsWith('/main/subscribers/');
+  const subscriberAccountNumber = isSubscriberDetailsPage
+    ? decodeURIComponent(pathname.split('/').at(-1) ?? '')
+    : '';
+  const activeNavItem = activeNavMain.find((item) =>
+    pathname === item.url || (item.url === '/main/subscribers' && isSubscriberDetailsPage),
+  );
   const isServiceRequestPage = pathname === '/main/service-request';
   const serviceRequestCategoryFilter = searchParams.get('category') ?? 'all';
   const breadcrumbPage = isServiceRequestPage
@@ -247,8 +252,9 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
   const isInstallationsPage = pathname === '/main/installations';
   const isJobOrdersPage = pathname === '/main/job-orders';
   const isBranchesPage = pathname === '/main/branches';
+  const isModemsPage = pathname === '/main/modems';
   const isSubscriptionPlansPage = pathname === '/main/subscription-plans';
-  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage || isBranchesPage || isSubscriptionPlansPage;
+  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage || isBranchesPage || isModemsPage || isSubscriptionPlansPage;
   const subscriberSearch = searchParams.get('q') ?? '';
   const subscriberStatusFilter = searchParams.get('status') ?? 'all';
   const subscriberPlanFilter = searchParams.get('plan') ?? 'all';
@@ -268,6 +274,8 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
       ? 'Search installations'
       : isBranchesPage
         ? 'Search branches'
+        : isModemsPage
+          ? 'Search modems'
         : isSubscriptionPlansPage
           ? 'Search plans'
           : 'Search subscribers';
@@ -277,6 +285,8 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
       ? 'Add Installation'
       : isBranchesPage
         ? 'Add Branch'
+        : isModemsPage
+          ? 'Add Modem'
         : isSubscriptionPlansPage
           ? 'Add Plan'
           : 'Add Subscriber';
@@ -321,7 +331,7 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
   );
 
   const handleAddClick = React.useCallback(() => {
-    if (!isSubscribersPage && !isJobOrdersPage && !isBranchesPage && !isSubscriptionPlansPage) return;
+    if (!isSubscribersPage && !isInstallationsPage && !isJobOrdersPage && !isBranchesPage && !isModemsPage && !isSubscriptionPlansPage) return;
 
     const params = new URLSearchParams(searchParams.toString());
 
@@ -329,7 +339,7 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
     router.replace(`${pathname}?${params.toString()}`, {
       scroll: false,
     });
-  }, [isBranchesPage, isJobOrdersPage, isSubscribersPage, isSubscriptionPlansPage, pathname, router, searchParams]);
+  }, [isBranchesPage, isInstallationsPage, isJobOrdersPage, isModemsPage, isSubscribersPage, isSubscriptionPlansPage, pathname, router, searchParams]);
 
   const handleCategoryClick = React.useCallback(() => {
     if (!isSubscriptionPlansPage) return;
@@ -560,14 +570,27 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
               {activeProjects.map((item) => {
                 const isActive = pathname === '/main/service-request' && serviceRequestCategoryFilter === item.name;
                 return (
-                  <SidebarMenuItem key={item.name}>
+                  <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <Link href={item.url}>
-                        <item.icon />
+                      <Link href={`/main/service-request?category=${encodeURIComponent(item.name)}`}>
+                        {item.iconDataUrl ? (
+                          <span className="relative size-4 shrink-0 overflow-hidden rounded-full" aria-hidden="true">
+                            <Image
+                              src={item.iconDataUrl}
+                              alt=""
+                              fill
+                              unoptimized
+                              sizes="16px"
+                              className="scale-125 object-cover"
+                            />
+                          </span>
+                        ) : (
+                          <Frame />
+                        )}
                         <span>{item.name}</span>
                       </Link>
                     </SidebarMenuButton>
-                    <SidebarMenuBadge>{item.pendingCount}</SidebarMenuBadge>
+                    <SidebarMenuBadge className="top-1.5">{item.pendingCount}</SidebarMenuBadge>
                   </SidebarMenuItem>
                 );
               })}
@@ -695,15 +718,25 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
             <Separator orientation="vertical" className="mr-2 h-4 my-auto" />
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/main/overview">
-                    {activeWorkspace.plan}
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{breadcrumbPage}</BreadcrumbPage>
+                  {isSubscriberDetailsPage ? (
+                    <BreadcrumbLink href="/main/subscribers">
+                      Subscribers
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage>{breadcrumbPage}</BreadcrumbPage>
+                  )}
                 </BreadcrumbItem>
+                {isSubscriberDetailsPage && (
+                  <>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="max-w-[48vw] truncate font-mono">
+                        {subscriberAccountNumber}
+                      </BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </>
+                )}
               </BreadcrumbList>
             </Breadcrumb>
           </div>
@@ -830,9 +863,9 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
                         onValueChange={(value) => updateSubscriptionPlanFilter('category', value)}
                       >
                         <DropdownMenuRadioItem value="all">All categories</DropdownMenuRadioItem>
-                        {SUBSCRIPTION_PLAN_CATEGORY_FILTERS.map((category) => (
-                          <DropdownMenuRadioItem key={category} value={category}>
-                            {category}
+                        {serviceRequestCategories.map((category) => (
+                          <DropdownMenuRadioItem key={category.id} value={category.name}>
+                            {category.name}
                           </DropdownMenuRadioItem>
                         ))}
                       </DropdownMenuRadioGroup>
@@ -862,8 +895,8 @@ export const RadixSidebarDemo = ({ children, user }: RadixSidebarDemoProps) => {
                   className="bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary"
                   onClick={handleAddClick}
                 >
-                  <Plus data-icon="inline-start" />
-                  <span className="hidden sm:inline">{addButtonLabel}</span>
+                  <Plus className="text-sky-700  dark:text-sky-300" data-icon="inline-start" />
+                  <span className="hidden text-sky-700 font-semibold dark:text-sky-300 sm:inline">{addButtonLabel}</span>
                 </Button>
               </div>
             </div>
