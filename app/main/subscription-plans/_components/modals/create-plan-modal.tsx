@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import {
   Dialog,
@@ -9,7 +9,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/animate-ui/components/radix/dialog'
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -36,7 +36,7 @@ type CreatePlanModalProps = {
   categories: SubscriptionPlanCategory[]
   groups: SubscriptionPlanCategoryGroup[]
   onCancel: () => void
-  onSubmit: (plan: SubscriptionPlan) => void
+  onSubmit: (plan: SubscriptionPlan) => void | Promise<void>
 }
 
 const billingTypes: BillingType[] = ['Prepaid', 'Postpaid']
@@ -61,6 +61,32 @@ export function CreatePlanModal({
   onCancel,
   onSubmit,
 }: CreatePlanModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <CreatePlanModalContent
+          key='create-plan'
+          categories={categories}
+          groups={groups}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+        />
+      ) : null}
+    </Dialog>
+  )
+}
+
+type CreatePlanModalContentProps = Pick<
+  CreatePlanModalProps,
+  'categories' | 'groups' | 'onCancel' | 'onSubmit'
+>
+
+function CreatePlanModalContent({
+  categories,
+  groups,
+  onCancel,
+  onSubmit,
+}: CreatePlanModalContentProps) {
   const [form, setForm] = useState(defaultForm)
   const [isCodeDirty, setIsCodeDirty] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
@@ -69,7 +95,8 @@ export function CreatePlanModal({
     : groups[0]?.id
       ? `group:${groups[0].id}`
       : ''
-  const [targetType, targetId] = (form.planTarget || defaultPlanTarget).split(':') as ['category' | 'group', string]
+  const selectedPlanTarget = form.planTarget || defaultPlanTarget
+  const [targetType, targetId] = selectedPlanTarget.split(':') as ['category' | 'group', string]
   const selectedCategory = targetType === 'category'
     ? categories.find((category) => category.id === targetId)
     : null
@@ -83,30 +110,16 @@ export function CreatePlanModal({
     speed: form.speed,
     price: form.price,
   })
-
-  useEffect(() => {
-    if (!open || form.planTarget || !defaultPlanTarget) return
-
-    setForm((current) => ({ ...current, planTarget: defaultPlanTarget }))
-  }, [defaultPlanTarget, form.planTarget, open])
-
-  useEffect(() => {
-    if (!open || isCodeDirty || form.code === generatedCode) return
-
-    setForm((current) => ({ ...current, code: generatedCode }))
-  }, [form.code, generatedCode, isCodeDirty, open])
+  const displayedCode = isCodeDirty ? form.code : generatedCode
 
   const resetForm = () => {
-    setForm({
-      ...defaultForm,
-      planTarget: defaultPlanTarget,
-    })
+    setForm(defaultForm)
     setIsCodeDirty(false)
     setShowErrors(false)
   }
 
   const handleSubmit = () => {
-    const cleanCode = (form.code.trim() || generatedCode).toUpperCase()
+    const cleanCode = displayedCode.trim().toUpperCase()
     const cleanName = form.name.trim()
     const price = Number(form.price)
     const hasErrors = !cleanCode || !cleanName || !selectedTarget || !Number.isFinite(price) || price < 0
@@ -143,199 +156,186 @@ export function CreatePlanModal({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) resetForm()
-        onOpenChange(nextOpen)
-      }}
-    >
-      <DialogContent
-        className='flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[600px] flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-h-[calc(100dvh-2rem)]'
-        from='top'
-      >
-        <DialogHeader className='border-b p-4 pr-12 sm:p-6'>
-          <DialogTitle className='text-base'>Add Plan</DialogTitle>
-          <DialogDescription>Create a subscription plan for subscriber accounts.</DialogDescription>
-        </DialogHeader>
-        <div className='overflow-y-auto p-4 sm:p-5'>
-          <div className='grid gap-4'>
-            <div className='grid gap-1.5'>
-              <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-code'>
-                Plan code
-              </label>
-              <Input
-                id='plan-code'
-                value={form.code}
-                onChange={(event) => {
-                  const nextCode = event.target.value.toUpperCase()
+    <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[620px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]'>
+      <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
+        <DialogTitle>Add Plan</DialogTitle>
+        <DialogDescription>Create a subscription plan for subscriber accounts.</DialogDescription>
+      </DialogHeader>
+      <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>
+        <div className='grid gap-1.5'>
+          <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-code'>
+            Plan code
+          </label>
+          <Input
+            id='plan-code'
+            value={displayedCode}
+            onChange={(event) => {
+              const nextCode = event.target.value.toUpperCase()
 
-                  setIsCodeDirty(nextCode.trim().length > 0)
-                  setForm((current) => ({ ...current, code: nextCode }))
-                }}
-                placeholder='INT-LITE-25'
-                className='font-mono text-[15px] uppercase sm:text-sm'
-                aria-invalid={showErrors && !form.code.trim()}
-              />
-              <p className='text-xs text-muted-foreground'>Auto-generated from the plan details, but you can edit it.</p>
-              {showErrors && !form.code.trim() && (
-                <p className='text-xs text-destructive'>Enter a plan code.</p>
-              )}
-            </div>
-            <div className='grid gap-1.5'>
-              <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-name'>
-                Plan name
-              </label>
-              <Input
-                id='plan-name'
-                value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder='AN Fiber 150mbps'
-                className='text-[15px] sm:text-sm'
-                aria-invalid={showErrors && !form.name.trim()}
-              />
-              {showErrors && !form.name.trim() && (
-                <p className='text-xs text-destructive'>Enter a plan name.</p>
-              )}
-            </div>
-            <div className='grid gap-3 sm:grid-cols-3'>
-              <div className='grid gap-1.5'>
-                <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-category'>
-                  Category
-                </label>
-                <Select
-                  value={form.planTarget || defaultPlanTarget}
-                  onValueChange={(value) =>
-                    setForm((current) => ({ ...current, planTarget: value }))
-                  }
-                >
-                  <SelectTrigger id='plan-category' className='h-10 w-full bg-background/40'>
-                    <SelectValue placeholder='Select category' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={`category:${category.id}`}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                    {groups.map((group) => (
-                      <SelectItem key={group.id} value={`group:${group.id}`}>
-                        {group.name} (Group)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className='grid gap-1.5'>
-                <label className='text-[13px] font-medium sm:text-sm' htmlFor='billing-type'>
-                  Billing
-                </label>
-                <Select
-                  value={form.billingType}
-                  onValueChange={(value) =>
-                    setForm((current) => ({ ...current, billingType: value as BillingType }))
-                  }
-                >
-                  <SelectTrigger id='billing-type' className='h-10 w-full bg-background/40'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {billingTypes.map((billingType) => (
-                      <SelectItem key={billingType} value={billingType}>
-                        {billingType}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className='grid gap-1.5'>
-                <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-status'>
-                  Status
-                </label>
-                <Select
-                  value={form.status}
-                  onValueChange={(value) =>
-                    setForm((current) => ({ ...current, status: value as PlanStatus }))
-                  }
-                >
-                  <SelectTrigger id='plan-status' className='h-10 w-full bg-background/40'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {planStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className='grid gap-3 sm:grid-cols-2'>
-              <div className='grid gap-1.5'>
-                <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-speed'>
-                  Speed
-                </label>
-                <Input
-                  id='plan-speed'
-                  value={form.speed}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, speed: event.target.value }))
-                  }
-                  placeholder='150 Mbps'
-                  className='text-[15px] sm:text-sm'
-                />
-              </div>
-              <div className='grid gap-1.5'>
-                <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-channels'>
-                  Channels
-                </label>
-                <Input
-                  id='plan-channels'
-                  value={form.channels}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, channels: event.target.value }))
-                  }
-                  placeholder='75 channels'
-                  className='text-[15px] sm:text-sm'
-                />
-              </div>
-            </div>
-            <div className='grid w-full gap-1.5 sm:max-w-[220px]'>
-              <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-price'>
-                Price (PHP)
-              </label>
-              <div className='relative'>
-                <span className='pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[15px] text-muted-foreground sm:text-sm'>
-                  PHP
-                </span>
-                <Input
-                  id='plan-price'
-                  inputMode='numeric'
-                  className='pl-10 text-[15px] sm:text-sm'
-                  value={form.price}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, price: event.target.value }))
-                  }
-                  placeholder='1299'
-                  aria-invalid={showErrors && (!Number.isFinite(Number(form.price)) || Number(form.price) < 0)}
-                />
-              </div>
-              {showErrors && (!Number.isFinite(Number(form.price)) || Number(form.price) < 0) && (
-                <p className='text-xs text-destructive'>Enter a valid price.</p>
-              )}
-            </div>
+              setIsCodeDirty(nextCode.trim().length > 0)
+              setForm((current) => ({ ...current, code: nextCode }))
+            }}
+            placeholder='INT-LITE-25'
+            className='font-mono text-[15px] uppercase sm:text-sm'
+            aria-invalid={showErrors && !form.code.trim()}
+          />
+          <p className='text-xs text-muted-foreground'>Auto-generated from the plan details, but you can edit it.</p>
+          {showErrors && !form.code.trim() && (
+            <p className='text-xs text-destructive'>Enter a plan code.</p>
+          )}
+        </div>
+        <div className='grid gap-1.5'>
+          <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-name'>
+            Plan name
+          </label>
+          <Input
+            id='plan-name'
+            value={form.name}
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            placeholder='AN Fiber 150mbps'
+            className='text-[15px] sm:text-sm'
+            aria-invalid={showErrors && !form.name.trim()}
+          />
+          {showErrors && !form.name.trim() && (
+            <p className='text-xs text-destructive'>Enter a plan name.</p>
+          )}
+        </div>
+        <div className='grid gap-3 sm:grid-cols-3'>
+          <div className='grid gap-1.5'>
+            <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-category'>
+              Category
+            </label>
+            <Select
+              value={selectedPlanTarget}
+              onValueChange={(value) =>
+                setForm((current) => ({ ...current, planTarget: value }))
+              }
+            >
+              <SelectTrigger id='plan-category' className='h-10 w-full bg-background/40'>
+                <SelectValue placeholder='Select category' />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={`category:${category.id}`}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={`group:${group.id}`}>
+                    {group.name} (Group)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className='grid gap-1.5'>
+            <label className='text-[13px] font-medium sm:text-sm' htmlFor='billing-type'>
+              Billing
+            </label>
+            <Select
+              value={form.billingType}
+              onValueChange={(value) =>
+                setForm((current) => ({ ...current, billingType: value as BillingType }))
+              }
+            >
+              <SelectTrigger id='billing-type' className='h-10 w-full bg-background/40'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {billingTypes.map((billingType) => (
+                  <SelectItem key={billingType} value={billingType}>
+                    {billingType}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className='grid gap-1.5'>
+            <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-status'>
+              Status
+            </label>
+            <Select
+              value={form.status}
+              onValueChange={(value) =>
+                setForm((current) => ({ ...current, status: value as PlanStatus }))
+              }
+            >
+              <SelectTrigger id='plan-status' className='h-10 w-full bg-background/40'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {planStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <DialogFooter className='border-t bg-muted/10 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-4'>
-          <Button type='button' variant='ghost' size='sm' onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button type='button' size='sm' onClick={handleSubmit}>
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className='grid gap-3 sm:grid-cols-2'>
+          <div className='grid gap-1.5'>
+            <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-speed'>
+              Speed
+            </label>
+            <Input
+              id='plan-speed'
+              value={form.speed}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, speed: event.target.value }))
+              }
+              placeholder='150 Mbps'
+              className='text-[15px] sm:text-sm'
+            />
+          </div>
+          <div className='grid gap-1.5'>
+            <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-channels'>
+              Channels
+            </label>
+            <Input
+              id='plan-channels'
+              value={form.channels}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, channels: event.target.value }))
+              }
+              placeholder='75 channels'
+              className='text-[15px] sm:text-sm'
+            />
+          </div>
+        </div>
+        <div className='grid w-full gap-1.5 sm:max-w-[220px]'>
+          <label className='text-[13px] font-medium sm:text-sm' htmlFor='plan-price'>
+            Price (PHP)
+          </label>
+          <div className='relative'>
+            <span className='pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[15px] text-muted-foreground sm:text-sm'>
+              PHP
+            </span>
+            <Input
+              id='plan-price'
+              inputMode='numeric'
+              className='pl-10 text-[15px] sm:text-sm'
+              value={form.price}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, price: event.target.value }))
+              }
+              placeholder='1299'
+              aria-invalid={showErrors && (!Number.isFinite(Number(form.price)) || Number(form.price) < 0)}
+            />
+          </div>
+          {showErrors && (!Number.isFinite(Number(form.price)) || Number(form.price) < 0) && (
+            <p className='text-xs text-destructive'>Enter a valid price.</p>
+          )}
+        </div>
+      </div>
+      <DialogFooter className='shrink-0 border-t bg-muted/10 px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]'>
+        <Button type='button' variant='ghost' size='sm' onClick={handleCancel}>
+          Cancel
+        </Button>
+        <Button type='button' size='sm' onClick={handleSubmit}>
+          Save
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   )
 }

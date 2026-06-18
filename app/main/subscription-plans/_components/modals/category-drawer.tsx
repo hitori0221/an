@@ -37,7 +37,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/animate-ui/components/radix/dialog'
+} from '@/components/ui/dialog'
 import {
   Sheet,
   SheetContent,
@@ -802,7 +802,7 @@ export function CategoryDrawer({
       <div className='flex items-start gap-3 rounded-md border bg-background p-3'>
         {renderCategoryIcon(iconDataUrl, mode === 'create' ? categoryName || 'Category' : editName || 'Category')}
         <div className='min-w-0 flex-1 space-y-2'>
-          <div className='grid grid-cols-3 gap-1.5'>
+          <div className='grid grid-cols-4 gap-1.5 sm:grid-cols-5'>
             {builtInNetworkingCategoryIcons.map((icon) => {
               const Icon = presetIconComponents[icon.value]
 
@@ -810,11 +810,13 @@ export function CategoryDrawer({
                 <button
                   key={icon.value}
                   type='button'
-                  className='flex min-w-0 items-center gap-1.5 rounded-md border bg-muted/20 px-2 py-1.5 text-left text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                  aria-label={icon.label}
+                  title={icon.label}
+                  className='flex aspect-square size-10 items-center justify-center rounded-md border bg-muted/20 text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                   onClick={() => handleBuiltInCategoryIconSelect(icon, mode)}
                 >
                   <span
-                    className='flex size-5 shrink-0 items-center justify-center rounded-full text-white shadow-xs'
+                    className='flex size-6 shrink-0 items-center justify-center rounded-full text-white shadow-xs'
                     style={{
                       background: `linear-gradient(135deg, ${icon.colors[0]}, ${icon.colors[1]})`,
                     }}
@@ -822,7 +824,6 @@ export function CategoryDrawer({
                   >
                     <Icon className='size-3.5' />
                   </span>
-                  <span className='truncate'>{icon.label}</span>
                 </button>
               )
             })}
@@ -1264,8 +1265,8 @@ export function CategoryDrawer({
       <Dialog open={isAdding} onOpenChange={(nextOpen) => {
         if (!nextOpen) closeCreateDialog()
       }}>
-        <DialogContent className='max-h-[88vh] max-w-[520px] overflow-y-auto'>
-          <DialogHeader>
+        <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[620px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]'>
+          <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
             <DialogTitle>{addMode === 'category' ? 'Create category' : 'Create group'}</DialogTitle>
             <DialogDescription>
               {addMode === 'category'
@@ -1273,7 +1274,7 @@ export function CategoryDrawer({
                 : 'Create a group, then choose the categories it can use.'}
             </DialogDescription>
           </DialogHeader>
-          <div className='flex flex-col gap-4'>
+          <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>
             <div className='grid grid-cols-2 gap-2'>
               <Button
                 type='button'
@@ -1364,7 +1365,7 @@ export function CategoryDrawer({
               <p className='text-xs text-destructive'>{saveError}</p>
             ) : null}
           </div>
-          <DialogFooter>
+          <DialogFooter className='shrink-0 border-t bg-muted/10 px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]'>
             <Button
               type='button'
               variant='ghost'

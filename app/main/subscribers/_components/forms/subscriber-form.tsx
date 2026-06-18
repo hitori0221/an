@@ -2,7 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import Image from 'next/image'
+import { ChevronDown as ChevronDownIcon } from '@gravity-ui/icons'
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/animate-ui/components/radix/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -10,7 +22,6 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -66,6 +77,41 @@ type FormState = {
 const NO_MODEM_VALUE = 'no-modem'
 const CATEGORY_VALUE_PREFIX = 'category:'
 const GROUP_VALUE_PREFIX = 'group:'
+
+const getCategoryInitials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase() || '?'
+
+function CategoryPickerIcon({
+  name,
+  iconDataUrl,
+  className,
+}: {
+  name: string
+  iconDataUrl?: string | null
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        'pointer-events-none relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-[10px] font-semibold leading-none text-muted-foreground shadow-xs',
+        className,
+      )}
+      aria-hidden='true'
+    >
+      {iconDataUrl ? (
+        <Image src={iconDataUrl} alt='' fill unoptimized sizes='28px' className='scale-125 object-cover' />
+      ) : (
+        getCategoryInitials(name)
+      )}
+    </span>
+  )
+}
 
 const createInitialFormState = (nextAccountNumber: string, subscriber?: Subscriber | null): FormState => ({
   accountNumber: subscriber?.accountNumber ?? nextAccountNumber,
@@ -127,8 +173,11 @@ export function SubscriberForm({
     () => plans.filter((plan) => plan.status === 'Active'),
     [plans],
   )
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  )
   const categoryGroupSections = useMemo(() => {
-    const categoryById = new Map(categories.map((category) => [category.id, category]))
     const sections = categoryGroups
       .map((group) => {
         const groupCategories = group.categoryIds
@@ -143,7 +192,18 @@ export function SubscriberForm({
       .filter((group) => group.categories.length > 0)
 
     return { sections, singleCategories: categories }
-  }, [categories, categoryGroups])
+  }, [categories, categoryById, categoryGroups])
+  const selectedCategoryGroup = useMemo(
+    () =>
+      form.subscriptionGroupId
+        ? categoryGroupSections.sections.find((group) => group.id === form.subscriptionGroupId) ?? null
+        : null,
+    [categoryGroupSections.sections, form.subscriptionGroupId],
+  )
+  const selectedCategory = useMemo(
+    () => (form.subscriptionCategoryId ? categoryById.get(form.subscriptionCategoryId) ?? null : null),
+    [categoryById, form.subscriptionCategoryId],
+  )
   const selectedCategoryGroupIds = useMemo(
     () =>
       form.subscriptionGroupId
@@ -638,59 +698,113 @@ export function SubscriberForm({
                   <label className='text-sm font-medium' htmlFor='subscriber-subscription-category'>
                     Subscription Category
                   </label>
-                  <Select
-                    value={subscriptionCategoryValue}
-                    onValueChange={updateSubscriptionCategory}
-                  >
-                    <SelectTrigger
-                      id='subscriber-subscription-category'
-                      className='w-full'
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type='button'
+                        variant='outline'
+                        size='lg'
+                        id='subscriber-subscription-category'
+                        className='w-full justify-between px-3 font-normal'
                       aria-invalid={showErrors && !form.subscriptionCategoryId && !form.subscriptionGroupId}
-                    >
-                      <SelectValue placeholder='Select category' />
-                    </SelectTrigger>
-                    <SelectContent className='w-[var(--radix-select-trigger-width)] min-w-[360px]'>
-                      {categoryGroupSections.sections.length > 0 && (
-                        <SelectGroup>
-                          <SelectLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase'>
-                            Group Categories
-                          </SelectLabel>
-                          {categoryGroupSections.sections.map((group) => (
-                            <SelectItem
-                              key={group.id}
-                              value={`${GROUP_VALUE_PREFIX}${group.id}`}
-                              className='min-h-10 py-2'
-                            >
-                              <span className='flex min-w-0 flex-1 items-center justify-between gap-3'>
-                                <span className='truncate'>{group.name}</span>
-                                <span className='truncate text-xs text-muted-foreground'>
-                                  {group.categories.map((category) => category.name).join(' + ')}
-                                </span>
+                      >
+                        {selectedCategoryGroup ? (
+                          <span className='flex min-w-0 items-center gap-3'>
+                            <span className='flex shrink-0 items-center'>
+                              {selectedCategoryGroup.categories.slice(0, 3).map((category, index) => (
+                                <CategoryPickerIcon
+                                  key={category.id}
+                                  name={category.name}
+                                  iconDataUrl={category.iconDataUrl}
+                                  className={index > 0 ? '-ml-2' : undefined}
+                                />
+                              ))}
+                            </span>
+                            <span className='min-w-0 text-left'>
+                              <span className='block truncate text-sm text-foreground'>{selectedCategoryGroup.name}</span>
+                              <span className='block truncate text-xs text-muted-foreground'>
+                                {selectedCategoryGroup.categories.map((category) => category.name).join(' + ')}
                               </span>
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )}
-                      {categoryGroupSections.singleCategories.length > 0 && (
-                        <SelectGroup>
-                          {categoryGroupSections.sections.length > 0 && (
-                            <SelectLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase'>
+                            </span>
+                          </span>
+                        ) : selectedCategory ? (
+                          <span className='flex min-w-0 items-center gap-3'>
+                            <CategoryPickerIcon
+                              name={selectedCategory.name}
+                              iconDataUrl={selectedCategory.iconDataUrl}
+                            />
+                            <span className='truncate text-sm text-foreground'>{selectedCategory.name}</span>
+                          </span>
+                        ) : (
+                          <span className='truncate text-sm text-muted-foreground'>Select category</span>
+                        )}
+                        <ChevronDownIcon className='size-4 text-muted-foreground' aria-hidden='true' />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align='start' className='min-w-[360px]'>
+                      <DropdownMenuRadioGroup value={subscriptionCategoryValue} onValueChange={updateSubscriptionCategory}>
+                        {categoryGroupSections.sections.length > 0 && (
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase text-muted-foreground'>
+                              Group Categories
+                            </DropdownMenuLabel>
+                            {categoryGroupSections.sections.map((group) => (
+                              <DropdownMenuRadioItem
+                                key={group.id}
+                                value={`${GROUP_VALUE_PREFIX}${group.id}`}
+                                id={`subscriber-category-group-${group.id}`}
+                                data-value={`subscriber-category-group-${group.id}`}
+                                textValue={group.name}
+                                className='min-h-12 py-2'
+                              >
+                                <span className='pointer-events-none flex min-w-0 flex-1 items-center gap-3'>
+                                  <span className='flex shrink-0 items-center'>
+                                    {group.categories.slice(0, 3).map((category, index) => (
+                                      <CategoryPickerIcon
+                                        key={category.id}
+                                        name={category.name}
+                                        iconDataUrl={category.iconDataUrl}
+                                        className={index > 0 ? '-ml-2' : undefined}
+                                      />
+                                    ))}
+                                  </span>
+                                  <span className='min-w-0 flex-1'>
+                                    <span className='block truncate'>{group.name}</span>
+                                    <span className='block truncate text-xs text-muted-foreground'>
+                                      {group.categories.map((category) => category.name).join(' + ')}
+                                    </span>
+                                  </span>
+                                </span>
+                              </DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuGroup>
+                        )}
+                        {categoryGroupSections.singleCategories.length > 0 && (
+                          <DropdownMenuGroup>
+                            {categoryGroupSections.sections.length > 0 && <DropdownMenuSeparator />}
+                            <DropdownMenuLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase text-muted-foreground'>
                               Single Categories
-                            </SelectLabel>
-                          )}
-                          {categoryGroupSections.singleCategories.map((category) => (
-                            <SelectItem
-                              key={category.id}
-                              value={`${CATEGORY_VALUE_PREFIX}${category.id}`}
-                              className='min-h-10 py-2'
-                            >
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )}
-                    </SelectContent>
-                  </Select>
+                            </DropdownMenuLabel>
+                            {categoryGroupSections.singleCategories.map((category) => (
+                              <DropdownMenuRadioItem
+                                key={category.id}
+                                value={`${CATEGORY_VALUE_PREFIX}${category.id}`}
+                                id={`subscriber-category-${category.id}`}
+                                data-value={`subscriber-category-${category.id}`}
+                                textValue={category.name}
+                                className='min-h-12 py-2'
+                              >
+                                <span className='pointer-events-none flex min-w-0 flex-1 items-center gap-3'>
+                                  <CategoryPickerIcon name={category.name} iconDataUrl={category.iconDataUrl} />
+                                  <span className='truncate'>{category.name}</span>
+                                </span>
+                              </DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuGroup>
+                        )}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {showErrors && !form.subscriptionCategoryId && !form.subscriptionGroupId && (
                     <p className='text-xs text-destructive'>Select a subscription category.</p>
                   )}
