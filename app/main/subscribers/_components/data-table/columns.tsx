@@ -80,7 +80,7 @@ export const getSubscriberColumns = ({
         </Button>
         <Link
           href={`/main/subscribers/${encodeURIComponent(row.original.accountNumber)}`}
-          className='font-semibold leading-tight text-sky-700 transition-colors hover:text-sky-900 hover:underline sm:text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 dark:text-sky-300 dark:hover:text-sky-100'
+          className='font-semibold leading-tight text-blue-600 transition-colors hover:text-blue-700 hover:underline sm:text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 dark:text-blue-400 dark:hover:text-blue-300 dark:focus-visible:ring-blue-400/40'
         >
           {row.getValue('accountNumber')}
         </Link>

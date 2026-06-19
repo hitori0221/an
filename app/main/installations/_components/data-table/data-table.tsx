@@ -93,18 +93,6 @@ export default function InstallationsDataTable({
       ...installableSubscribers,
     ]
   }, [editingInstallation, installableSubscribers])
-  const columns = useMemo(
-    () =>
-      getInstallationColumns({
-        onEdit: setEditingInstallation,
-        onStatusChange: (installation, status) => {
-          void handleUpdateInstallationStatus(installation, status)
-        },
-        onDelete: setPendingDeleteInstallation,
-      }),
-    [],
-  )
-
   const closeCreateModal = () => {
     const params = new URLSearchParams(searchParams.toString())
 
@@ -161,6 +149,7 @@ export default function InstallationsDataTable({
       technician: installation.technician,
       crew: installation.crew,
       scheduleDate: installation.scheduleDateValue,
+      installedAt: installation.installedAtValue,
       status,
       materials: installation.materials,
       notes: installation.notes,
@@ -225,6 +214,14 @@ export default function InstallationsDataTable({
     ])
     setPendingDeleteInstallation(null)
   }
+
+  const columns = getInstallationColumns({
+    onEdit: setEditingInstallation,
+    onStatusChange: (installation, status) => {
+      void handleUpdateInstallationStatus(installation, status)
+    },
+    onDelete: setPendingDeleteInstallation,
+  })
 
   return (
     <>

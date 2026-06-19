@@ -21,17 +21,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import type { JobOrder, JobOrderPriority, JobOrderStatus } from './types'
+import type { JobOrder, JobOrderStatus } from './types'
 
 export const jobOrderColumnClassNames: Record<string, string> = {
   ticketNumber: 'w-[15%] min-w-[136px]',
   subscriberName: 'w-[16%] min-w-[138px]',
   problemCategory: 'w-[16%] min-w-[138px]',
-  priority: 'w-[10%] min-w-[88px]',
-  technician: 'w-[14%] min-w-[122px]',
-  status: 'w-[12%] min-w-[112px]',
-  createdDate: 'w-[11%] min-w-[112px]',
-  action: 'w-[6%] min-w-[64px]',
+  technician: 'w-[16%] min-w-[122px]',
+  status: 'w-[14%] min-w-[112px]',
+  createdDate: 'w-[13%] min-w-[112px]',
+  action: 'w-[10%] min-w-[64px]',
 }
 
 const statusStyles: Record<JobOrderStatus, string> = {
@@ -43,14 +42,9 @@ const statusStyles: Record<JobOrderStatus, string> = {
   Cancelled: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
 }
 
-const priorityStyles: Record<JobOrderPriority, string> = {
-  Low: 'border-muted-foreground/20 bg-muted text-muted-foreground',
-  Medium: 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  High: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  Urgent: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
-}
-
-export const jobOrderColumns: ColumnDef<JobOrder>[] = [
+export const getJobOrderColumns = (
+  onStatusChange: (jobOrderId: string, status: JobOrderStatus) => void,
+): ColumnDef<JobOrder>[] => [
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Ticket Number' />,
     accessorKey: 'ticketNumber',
@@ -91,22 +85,6 @@ export const jobOrderColumns: ColumnDef<JobOrder>[] = [
     cell: ({ row }) => (
       <span className='block truncate leading-tight text-muted-foreground'>{row.getValue('problemCategory')}</span>
     ),
-  },
-  {
-    header: ({ column }) => <SortableColumnHeader column={column} title='Priority' />,
-    accessorKey: 'priority',
-    cell: ({ row }) => {
-      const priority = row.getValue('priority') as JobOrderPriority
-
-      return (
-        <Badge
-          variant='outline'
-          className={cn('inline-flex h-6 items-center px-2 py-0.5 font-medium', priorityStyles[priority])}
-        >
-          {priority}
-        </Badge>
-      )
-    },
   },
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Technician' />,
@@ -160,15 +138,18 @@ export const jobOrderColumns: ColumnDef<JobOrder>[] = [
             <DropdownMenuLabel>{row.original.ticketNumber}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <span>Assign technician</span>
+              <DropdownMenuItem onClick={() => onStatusChange(row.original.id, 'In Progress')}>
+                <span>Start progress</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onStatusChange(row.original.id, 'Resolved')}>
                 <span>Mark resolved</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant='destructive'>
+            <DropdownMenuItem
+              variant='destructive'
+              onClick={() => onStatusChange(row.original.id, 'Cancelled')}
+            >
               <span>Cancel ticket</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

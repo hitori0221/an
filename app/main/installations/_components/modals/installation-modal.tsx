@@ -99,6 +99,7 @@ function InstallationModalContent({
           technician: installation.technician,
           crew: installation.crew,
           scheduleDate: installation.scheduleDateValue,
+          installedAt: installation.installedAtValue,
           status: installation.status,
           materials: installation.materials,
           notes: installation.notes,

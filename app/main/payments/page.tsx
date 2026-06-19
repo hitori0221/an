@@ -1,12 +1,17 @@
-'use client'
+import { getPaymentsPageData } from '@/lib/billing'
 
-export default function PaymentsPage() {
+import { PaymentsClient } from '../billing/_components/data-table/payments-client'
+
+export const dynamic = 'force-dynamic'
+
+export default async function PaymentsPage() {
+  const { payments, openInvoices, subscribers } = await getPaymentsPageData()
+
   return (
-    <div className='min-w-0 w-full'>
-      <div className='rounded-md border bg-background px-5 py-6 shadow-xs'>
-        <h1 className='text-xl font-semibold leading-tight text-foreground'>Payments</h1>
-        <p className='mt-2 text-sm text-muted-foreground'>No payment records yet.</p>
-      </div>
-    </div>
+    <PaymentsClient
+      initialPayments={payments}
+      initialOpenInvoices={openInvoices}
+      subscribers={subscribers}
+    />
   )
 }

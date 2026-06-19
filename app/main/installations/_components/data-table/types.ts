@@ -19,6 +19,8 @@ export type Installation = {
   crew: string
   scheduleDate: string
   scheduleDateValue: string
+  installedAt: string
+  installedAtValue: string
   status: InstallationStatus
   phoneNumber: string
   address: string
@@ -32,6 +34,7 @@ export type InstallationInput = {
   technician: string
   crew: string
   scheduleDate: string
+  installedAt?: string
   status: InstallationStatus
   materials: string
   notes: string

@@ -9,9 +9,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/animate-ui/components/radix/dropdown-menu'
@@ -99,7 +98,7 @@ function CategoryPickerIcon({
   return (
     <span
       className={cn(
-        'pointer-events-none relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-[10px] font-semibold leading-none text-muted-foreground shadow-xs',
+        'relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-[10px] font-semibold leading-none text-muted-foreground shadow-xs',
         className,
       )}
       aria-hidden='true'
@@ -155,11 +154,6 @@ export function SubscriberForm({
   const [contractPicture, setContractPicture] = useState<File | null>(null)
   const [showErrors, setShowErrors] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const subscriptionCategoryValue = form.subscriptionGroupId
-    ? `${GROUP_VALUE_PREFIX}${form.subscriptionGroupId}`
-    : form.subscriptionCategoryId
-      ? `${CATEGORY_VALUE_PREFIX}${form.subscriptionCategoryId}`
-      : ''
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.status === 'Active'),
@@ -741,23 +735,19 @@ export function SubscriberForm({
                         <ChevronDownIcon className='size-4 text-muted-foreground' aria-hidden='true' />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align='start' className='min-w-[360px]'>
-                      <DropdownMenuRadioGroup value={subscriptionCategoryValue} onValueChange={updateSubscriptionCategory}>
+                      <DropdownMenuContent align='start' className='min-w-[360px]'>
                         {categoryGroupSections.sections.length > 0 && (
                           <DropdownMenuGroup>
                             <DropdownMenuLabel className='px-2 pt-2 pb-1 text-[11px] font-medium uppercase text-muted-foreground'>
                               Group Categories
                             </DropdownMenuLabel>
                             {categoryGroupSections.sections.map((group) => (
-                              <DropdownMenuRadioItem
+                              <DropdownMenuItem
                                 key={group.id}
-                                value={`${GROUP_VALUE_PREFIX}${group.id}`}
-                                id={`subscriber-category-group-${group.id}`}
-                                data-value={`subscriber-category-group-${group.id}`}
-                                textValue={group.name}
+                                onSelect={() => updateSubscriptionCategory(`${GROUP_VALUE_PREFIX}${group.id}`)}
                                 className='min-h-12 py-2'
                               >
-                                <span className='pointer-events-none flex min-w-0 flex-1 items-center gap-3'>
+                                <span className='flex min-w-0 flex-1 items-center gap-3'>
                                   <span className='flex shrink-0 items-center'>
                                     {group.categories.slice(0, 3).map((category, index) => (
                                       <CategoryPickerIcon
@@ -775,7 +765,7 @@ export function SubscriberForm({
                                     </span>
                                   </span>
                                 </span>
-                              </DropdownMenuRadioItem>
+                              </DropdownMenuItem>
                             ))}
                           </DropdownMenuGroup>
                         )}
@@ -786,23 +776,19 @@ export function SubscriberForm({
                               Single Categories
                             </DropdownMenuLabel>
                             {categoryGroupSections.singleCategories.map((category) => (
-                              <DropdownMenuRadioItem
+                              <DropdownMenuItem
                                 key={category.id}
-                                value={`${CATEGORY_VALUE_PREFIX}${category.id}`}
-                                id={`subscriber-category-${category.id}`}
-                                data-value={`subscriber-category-${category.id}`}
-                                textValue={category.name}
+                                onSelect={() => updateSubscriptionCategory(`${CATEGORY_VALUE_PREFIX}${category.id}`)}
                                 className='min-h-12 py-2'
                               >
-                                <span className='pointer-events-none flex min-w-0 flex-1 items-center gap-3'>
+                                <span className='flex min-w-0 flex-1 items-center gap-3'>
                                   <CategoryPickerIcon name={category.name} iconDataUrl={category.iconDataUrl} />
                                   <span className='truncate'>{category.name}</span>
                                 </span>
-                              </DropdownMenuRadioItem>
+                              </DropdownMenuItem>
                             ))}
                           </DropdownMenuGroup>
                         )}
-                      </DropdownMenuRadioGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
                   {showErrors && !form.subscriptionCategoryId && !form.subscriptionGroupId && (

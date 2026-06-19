@@ -1,12 +1,11 @@
-'use client'
+import { getCollectionsPageData } from '@/lib/billing'
 
-export default function CollectionsPage() {
-  return (
-    <div className='min-w-0 w-full'>
-      <div className='rounded-md border bg-background px-5 py-6 shadow-xs'>
-        <h1 className='text-xl font-semibold leading-tight text-foreground'>Collections</h1>
-        <p className='mt-2 text-sm text-muted-foreground'>No collections yet.</p>
-      </div>
-    </div>
-  )
+import { CollectionsClient } from '../billing/_components/data-table/collections-client'
+
+export const dynamic = 'force-dynamic'
+
+export default async function CollectionsPage() {
+  const { payments, summaries } = await getCollectionsPageData()
+
+  return <CollectionsClient payments={payments} summaries={summaries} />
 }

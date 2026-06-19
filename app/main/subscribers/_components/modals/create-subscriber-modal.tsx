@@ -56,7 +56,7 @@ export function CreateSubscriberModal({
           <DialogPrimitive.Portal forceMount>
             <DialogPrimitive.Overlay asChild forceMount>
               <motion.div
-                className='fixed inset-0 z-50 bg-black/50'
+                className='fixed inset-0 z-50 bg-black/50 backdrop-blur-sm'
                 initial={{ opacity: 0, filter: 'blur(4px)' }}
                 animate={{ opacity: 1, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, filter: 'blur(4px)' }}

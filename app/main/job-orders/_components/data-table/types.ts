@@ -6,8 +6,6 @@ export type JobOrderStatus =
   | 'Closed'
   | 'Cancelled'
 
-export type JobOrderPriority = 'Low' | 'Medium' | 'High' | 'Urgent'
-
 export type ProblemCategory =
   | 'No Internet'
   | 'Slow Connection'
@@ -27,6 +25,7 @@ export type JobOrderActivity = {
 export type JobOrder = {
   id: string
   ticketNumber: string
+  subscriberId: string
   accountNumber: string
   subscriberName: string
   phoneNumber: string
@@ -35,10 +34,27 @@ export type JobOrder = {
   barangay: string
   problemCategory: ProblemCategory
   problemDetails: string
-  priority: JobOrderPriority
   technician: string
   status: JobOrderStatus
   createdDate: string
   lastUpdate: string
   activities: JobOrderActivity[]
+}
+
+export type JobOrderInput = {
+  ticketNumber: string
+  subscriberId: string
+  technician: string
+  problemCategory: ProblemCategory
+  problemDetails: string
+}
+
+export type JobOrderSubscriberOption = {
+  id: string
+  accountNumber: string
+  name: string
+  phoneNumber: string
+  plan: string
+  city: string
+  barangay: string
 }

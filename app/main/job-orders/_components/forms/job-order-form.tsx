@@ -13,22 +13,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-import { jobOrderPriorities, problemCategories, technicians } from '../data-table/data'
-import type { JobOrder, JobOrderPriority, ProblemCategory } from '../data-table/types'
-import type { Subscriber } from '@/app/main/subscribers/_components/data-table/types'
+import { problemCategories } from '../data-table/data'
+import type { JobOrderInput, JobOrderSubscriberOption, ProblemCategory } from '../data-table/types'
 
 type JobOrderFormProps = {
   nextTicketNumber: string
-  subscribers: Subscriber[]
+  subscribers: JobOrderSubscriberOption[]
   onCancel: () => void
-  onSubmit: (jobOrder: JobOrder) => void
+  onSubmit: (input: JobOrderInput) => Promise<boolean>
 }
 
 type FormState = {
   accountNumber: string
   technician: string
   problemCategory: ProblemCategory | ''
-  priority: JobOrderPriority | ''
   problemDetails: string
 }
 
@@ -46,12 +44,12 @@ export function JobOrderForm({
 }: JobOrderFormProps) {
   const [form, setForm] = useState<FormState>({
     accountNumber: '',
-    technician: technicians[0],
+    technician: '',
     problemCategory: '',
-    priority: 'Medium',
     problemDetails: '',
   })
   const [showErrors, setShowErrors] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const selectedSubscriber = useMemo(
     () => subscribers.find((subscriber) => subscriber.accountNumber === form.accountNumber),
@@ -60,56 +58,33 @@ export function JobOrderForm({
 
   const hasErrors =
     !selectedSubscriber ||
-    !form.technician ||
+    !form.technician.trim() ||
     !form.problemCategory ||
-    !form.priority ||
     !form.problemDetails.trim()
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setShowErrors(true)
 
-    if (hasErrors || !selectedSubscriber || !form.problemCategory || !form.priority) {
+    if (hasErrors || !selectedSubscriber || !form.problemCategory) {
       return
     }
 
-    onSubmit({
-      id: nextTicketNumber,
+    setIsSubmitting(true)
+    const didCreate = await onSubmit({
       ticketNumber: nextTicketNumber,
-      accountNumber: selectedSubscriber.accountNumber,
-      subscriberName: selectedSubscriber.name,
-      phoneNumber: selectedSubscriber.phoneNumber,
-      plan: selectedSubscriber.plan,
-      city: selectedSubscriber.city,
-      barangay: selectedSubscriber.barangay,
+      subscriberId: selectedSubscriber.id,
       problemCategory: form.problemCategory,
       problemDetails: form.problemDetails.trim(),
-      priority: form.priority,
-      technician: form.technician,
-      status: 'Assigned',
-      createdDate: 'May 30, 2026',
-      lastUpdate: 'Created from the operations job order drawer.',
-      activities: [
-        {
-          id: `${nextTicketNumber}-A1`,
-          title: 'Created ticket',
-          description: `${form.problemCategory} issue logged from the operations drawer.`,
-          timestamp: 'May 30, 2026 01:36 AM',
-        },
-        {
-          id: `${nextTicketNumber}-A2`,
-          title: 'Assigned technician',
-          description: `Assigned to ${form.technician}.`,
-          timestamp: 'May 30, 2026 01:36 AM',
-        },
-      ],
-    })
+      technician: form.technician.trim(),
+    }).finally(() => setIsSubmitting(false))
+
+    if (!didCreate) return
 
     setForm({
       accountNumber: '',
-      technician: technicians[0],
+      technician: '',
       problemCategory: '',
-      priority: 'Medium',
       problemDetails: '',
     })
     setShowErrors(false)
@@ -160,52 +135,21 @@ export function JobOrderForm({
           )}
         </div>
 
-        <div className='grid gap-3 sm:grid-cols-2'>
-          <div className='flex flex-col gap-1.5'>
-            <label className='text-sm font-medium' htmlFor='job-order-technician'>
-              Technician
-            </label>
-            <Select
-              value={form.technician}
-              onValueChange={(value) => setForm((current) => ({ ...current, technician: value }))}
-            >
-              <SelectTrigger id='job-order-technician' className='w-full'>
-                <SelectValue placeholder='Select technician' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {technicians.map((technician) => (
-                    <SelectItem key={technician} value={technician}>
-                      {technician}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className='flex flex-col gap-1.5'>
-            <label className='text-sm font-medium' htmlFor='job-order-priority'>
-              Priority
-            </label>
-            <Select
-              value={form.priority}
-              onValueChange={(value) => setForm((current) => ({ ...current, priority: value as JobOrderPriority }))}
-            >
-              <SelectTrigger id='job-order-priority' className='w-full'>
-                <SelectValue placeholder='Select priority' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {jobOrderPriorities.map((priority) => (
-                    <SelectItem key={priority} value={priority}>
-                      {priority}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className='flex flex-col gap-1.5'>
+          <label className='text-sm font-medium' htmlFor='job-order-technician'>
+            Technician
+          </label>
+          <input
+            id='job-order-technician'
+            className={fieldClassName}
+            value={form.technician}
+            placeholder='Enter technician name'
+            onChange={(event) => setForm((current) => ({ ...current, technician: event.target.value }))}
+            aria-invalid={showErrors && !form.technician.trim()}
+          />
+          {showErrors && !form.technician.trim() && (
+            <p className='text-xs text-destructive'>Enter a technician name.</p>
+          )}
         </div>
 
         <div className='flex flex-col gap-1.5'>
@@ -278,8 +222,9 @@ export function JobOrderForm({
         <Button
           type='submit'
           size='sm'
+          disabled={isSubmitting}
         >
-          Create Ticket
+          {isSubmitting ? 'Creating...' : 'Create Ticket'}
         </Button>
       </div>
     </form>

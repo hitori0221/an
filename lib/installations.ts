@@ -15,6 +15,7 @@ type InstallationRow = {
   technician: string
   crew: string
   schedule_date: string | null
+  installed_at: string | null
   status: InstallationStatus
   materials: string
   notes: string
@@ -61,6 +62,7 @@ const installationSelect = `
   technician,
   crew,
   schedule_date,
+  installed_at,
   status,
   materials,
   notes,
@@ -138,6 +140,8 @@ const normalizeInstallation = (installation: InstallationRow): Installation => {
     crew: installation.crew,
     scheduleDate: formatInstallationDate(installation.schedule_date),
     scheduleDateValue: installation.schedule_date ?? '',
+    installedAt: formatInstallationDate(installation.installed_at),
+    installedAtValue: installation.installed_at ?? '',
     status: installation.status,
     phoneNumber: subscriber?.phone_number ?? '',
     address: subscriber ? formatAddress(subscriber) : '',
@@ -240,6 +244,7 @@ export async function createInstallation(input: InstallationInput) {
       technician: input.technician,
       crew: input.crew,
       schedule_date: input.scheduleDate || null,
+      installed_at: input.status === 'Installed' ? input.installedAt || input.scheduleDate || new Date().toISOString().slice(0, 10) : null,
       status: input.status,
       materials: input.materials,
       notes: input.notes,
@@ -264,6 +269,7 @@ export async function updateInstallation(installationId: string, input: Installa
       technician: input.technician,
       crew: input.crew,
       schedule_date: input.scheduleDate || null,
+      installed_at: input.status === 'Installed' ? input.installedAt || input.scheduleDate || new Date().toISOString().slice(0, 10) : null,
       status: input.status,
       materials: input.materials,
       notes: input.notes,

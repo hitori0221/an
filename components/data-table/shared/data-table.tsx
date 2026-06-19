@@ -1,8 +1,7 @@
 'use client'
 
-import { Fragment, ReactNode, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, ReactNode, useDeferredValue, useLayoutEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
-import { useSearchParams } from 'next/navigation'
 
 import type {
   ColumnDef,
@@ -31,6 +30,7 @@ import { Collapsible, CollapsibleContent } from '@/components/animate-ui/primiti
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { useTableSearch } from './table-search-context'
 
 const DEFAULT_PAGE_SIZE = 15
 const MIN_PAGE_SIZE = 5
@@ -56,8 +56,8 @@ export function DataTable<TData, TValue>({
   minWidthClassName,
   renderExpandedRow,
 }: DataTableProps<TData, TValue>) {
-  const searchParams = useSearchParams()
-  const globalFilter = searchParams.get('q') ?? ''
+  const { search } = useTableSearch()
+  const globalFilter = useDeferredValue(search)
   const rootRef = useRef<HTMLDivElement>(null)
   const paginationRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
@@ -131,7 +131,8 @@ export function DataTable<TData, TValue>({
         controlledItems
         mode='parent'
         forceUpdateBounds
-        className='rounded-md bg-sidebar-accent/80'
+        boundsOffset={{ top: -1, left: -1, width: 2, height: 1 }}
+        className='bg-sidebar-accent/80'
         containerClassName='relative max-w-full overflow-hidden rounded-md border bg-background shadow-xs [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table-container]]:overflow-y-hidden'
         transition={{ type: 'spring', stiffness: 350, damping: 35 }}
       >
@@ -157,7 +158,7 @@ export function DataTable<TData, TValue>({
                   <HighlightItem
                     asChild
                     value={row.id}
-                    activeClassName='rounded-md bg-sidebar-accent/80'
+                    activeClassName='bg-sidebar-accent/80'
                   >
                     <motion.tr
                       data-state={row.getIsSelected() && 'selected'}

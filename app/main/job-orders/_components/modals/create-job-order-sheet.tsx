@@ -9,16 +9,15 @@ import {
 } from '@/components/animate-ui/components/radix/sheet'
 
 import { JobOrderForm } from '../forms/job-order-form'
-import type { Subscriber } from '@/app/main/subscribers/_components/data-table/types'
-import type { JobOrder } from '../data-table/types'
+import type { JobOrderInput, JobOrderSubscriberOption } from '../data-table/types'
 
 type CreateJobOrderSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   nextTicketNumber: string
-  subscribers: Subscriber[]
+  subscribers: JobOrderSubscriberOption[]
   onCancel: () => void
-  onSubmit: (jobOrder: JobOrder) => void
+  onSubmit: (input: JobOrderInput) => Promise<boolean>
 }
 
 export function CreateJobOrderSheet({

@@ -130,7 +130,7 @@ function renderSubscriberExpandedRow(
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
         <div className='flex flex-col gap-1'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Account Number</p>
-          <p className='text-sm text-foreground'>{row.original.accountNumber}</p>
+          <p className='text-sm text-blue-600 dark:text-blue-400'>{row.original.accountNumber}</p>
         </div>
         <div className='flex flex-col gap-1'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Phone Number</p>

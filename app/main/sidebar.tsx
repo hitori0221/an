@@ -18,6 +18,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TableSearchProvider } from '@/components/data-table/shared/table-search-context';
 import { ThemeTogglerButton } from '@/components/animate-ui/components/buttons/theme-toggler';
 import {
   SidebarProvider,
@@ -85,6 +86,7 @@ import {
 } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+
 const DATA = {
   workspaces: [
     {
@@ -143,7 +145,7 @@ const DATA = {
       icon: CreditCard,
     },
     {
-      title: 'Due Accounts',
+      title: 'Invoices',
       url: '/main/due-accounts',
       icon: CoinsIcon,
     },
@@ -254,8 +256,14 @@ export const RadixSidebarDemo = ({
   const isBranchesPage = pathname === '/main/branches';
   const isModemsPage = pathname === '/main/modems';
   const isSubscriptionPlansPage = pathname === '/main/subscription-plans';
-  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage || isBranchesPage || isModemsPage || isSubscriptionPlansPage;
-  const subscriberSearch = searchParams.get('q') ?? '';
+  const isPaymentsPage = pathname === '/main/payments';
+  const isDueAccountsPage = pathname === '/main/due-accounts';
+  const isCollectionsPage = pathname === '/main/collections';
+  const isBillingTablePage = isPaymentsPage || isDueAccountsPage || isCollectionsPage;
+  const isTablePage = isSubscribersPage || isInstallationsPage || isJobOrdersPage || isBranchesPage || isModemsPage || isSubscriptionPlansPage || isBillingTablePage;
+  const canAddFromHeader = !isCollectionsPage;
+  const searchQuery = searchParams.get('q') ?? '';
+  const [tableSearch, setTableSearch] = React.useState(searchQuery);
   const subscriberStatusFilter = searchParams.get('status') ?? 'all';
   const subscriberPlanFilter = searchParams.get('plan') ?? 'all';
   const activeSubscriberFilters = [
@@ -272,6 +280,12 @@ export const RadixSidebarDemo = ({
     ? 'Search job orders'
     : isInstallationsPage
       ? 'Search installations'
+      : isPaymentsPage
+        ? 'Search payments'
+      : isDueAccountsPage
+        ? 'Search invoices'
+      : isCollectionsPage
+        ? 'Search collections'
       : isBranchesPage
         ? 'Search branches'
         : isModemsPage
@@ -283,6 +297,10 @@ export const RadixSidebarDemo = ({
     ? 'Add Job Order'
     : isInstallationsPage
       ? 'Add Installation'
+      : isPaymentsPage
+        ? 'Add Payment'
+      : isDueAccountsPage
+        ? 'Add Invoice'
       : isBranchesPage
         ? 'Add Branch'
         : isModemsPage
@@ -314,24 +332,13 @@ export const RadixSidebarDemo = ({
 
   const updateSubscriberSearch = React.useCallback(
     (value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-
-      if (value) {
-        params.set('q', value);
-      } else {
-        params.delete('q');
-      }
-
-      const queryString = params.toString();
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-        scroll: false,
-      });
+      setTableSearch(value);
     },
-    [pathname, router, searchParams],
+    [],
   );
 
   const handleAddClick = React.useCallback(() => {
-    if (!isSubscribersPage && !isInstallationsPage && !isJobOrdersPage && !isBranchesPage && !isModemsPage && !isSubscriptionPlansPage) return;
+    if (!canAddFromHeader || (!isSubscribersPage && !isInstallationsPage && !isJobOrdersPage && !isBranchesPage && !isModemsPage && !isSubscriptionPlansPage && !isPaymentsPage && !isDueAccountsPage)) return;
 
     const params = new URLSearchParams(searchParams.toString());
 
@@ -339,7 +346,7 @@ export const RadixSidebarDemo = ({
     router.replace(`${pathname}?${params.toString()}`, {
       scroll: false,
     });
-  }, [isBranchesPage, isInstallationsPage, isJobOrdersPage, isModemsPage, isSubscribersPage, isSubscriptionPlansPage, pathname, router, searchParams]);
+  }, [canAddFromHeader, isBranchesPage, isDueAccountsPage, isInstallationsPage, isJobOrdersPage, isModemsPage, isPaymentsPage, isSubscribersPage, isSubscriptionPlansPage, pathname, router, searchParams]);
 
   const handleCategoryClick = React.useCallback(() => {
     if (!isSubscriptionPlansPage) return;
@@ -444,6 +451,10 @@ export const RadixSidebarDemo = ({
   }, [pathname]);
 
   React.useEffect(() => {
+    setTableSearch(searchQuery);
+  }, [pathname, searchQuery]);
+
+  React.useEffect(() => {
     const workspaceForPath = getWorkspaceForPath(pathname);
 
     setActiveWorkspace((currentWorkspace) =>
@@ -454,9 +465,10 @@ export const RadixSidebarDemo = ({
   if (!activeWorkspace) return null;
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon" >
-        <SidebarHeader>
+    <TableSearchProvider value={{ search: tableSearch, setSearch: setTableSearch }}>
+      <SidebarProvider>
+        <Sidebar collapsible="icon">
+          <SidebarHeader>
           {/* Workspace Switcher */}
           <SidebarMenu>
             <SidebarMenuItem>
@@ -466,8 +478,20 @@ export const RadixSidebarDemo = ({
                     size="lg"
                     className="group/workspace-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-600 text-sidebar-primary-foreground">
-                      <activeWorkspace.logo className="size-4" />
+                    <div className="relative flex aspect-square size-8 items-center justify-center bg-transparent">
+                      <span className="flex size-8 items-center justify-center overflow-hidden">
+                        <Image
+                          src="/logo.png"
+                          alt="AN System"
+                          width={32}
+                          height={32}
+                          priority
+                          className="size-8 scale-125 object-cover"
+                        />
+                      </span>
+                      <span className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-blue-600 text-white ring-2 ring-sidebar">
+                        <activeWorkspace.logo className="size-2.5" />
+                      </span>
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">
@@ -742,14 +766,14 @@ export const RadixSidebarDemo = ({
           </div>
           {isTablePage && (
             <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-              {isSearchExpanded || subscriberSearch ? (
+              {isSearchExpanded || tableSearch ? (
                 <div className="relative w-44 sm:w-64">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-blue-600" />
                   <Input
                     ref={subscriberSearchRef}
                     type="search"
                     placeholder={searchPlaceholder}
-                    value={subscriberSearch}
+                    value={tableSearch}
                     onChange={(event) => updateSubscriberSearch(event.target.value)}
                     className="h-8 border-transparent bg-background/40 pl-8 pr-7 text-sm shadow-none hover:bg-muted/50 focus-visible:bg-background dark:bg-transparent dark:hover:bg-muted/40 dark:focus-visible:bg-background"
                     aria-label={searchPlaceholder}
@@ -766,12 +790,12 @@ export const RadixSidebarDemo = ({
                   onClick={expandSearch}
                   aria-label={searchPlaceholder}
                 >
-                  <Search />
+                  <Search  />
                 </Button>
               )}
               {isSubscriptionPlansPage && (
                 <Button type="button" variant="ghost" size="sm" onClick={handleCategoryClick}>
-                  <Settings2 data-icon="inline-start" />
+                  <Settings2  data-icon="inline-start" />
                   <span className="hidden sm:inline">Category</span>
                 </Button>
               )}
@@ -785,7 +809,7 @@ export const RadixSidebarDemo = ({
                         size="sm"
                         className={activeSubscriberFilters > 0 ? 'bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary' : undefined}
                       >
-                        <Funnel data-icon="inline-start" />
+                        <Funnel  data-icon="inline-start" />
                         <span className="hidden sm:inline">
                           Filters{activeSubscriberFilters > 0 ? ` (${activeSubscriberFilters})` : ''}
                         </span>
@@ -837,7 +861,7 @@ export const RadixSidebarDemo = ({
                         size="sm"
                         className={activeSubscriptionPlanFilters > 0 ? 'bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary' : undefined}
                       >
-                        <Funnel data-icon="inline-start" />
+                        <Funnel className="text-blue-600" data-icon="inline-start" />
                         <span className="hidden sm:inline">
                           Filters{activeSubscriptionPlanFilters > 0 ? ` (${activeSubscriptionPlanFilters})` : ''}
                         </span>
@@ -881,23 +905,25 @@ export const RadixSidebarDemo = ({
                   </DropdownMenu>
                 )}
                 <Button type="button" variant="ghost" size="sm">
-                  <Upload data-icon="inline-start" />
+                  <Upload  data-icon="inline-start" />
                   <span className="hidden sm:inline">Import</span>
                 </Button>
                 <Button type="button" variant="ghost" size="sm">
-                  <Download data-icon="inline-start" />
+                  <Download  data-icon="inline-start" />
                   <span className="hidden sm:inline">Export</span>
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="bg-secondary hover:bg-secondary/80 dark:bg-secondary/80 dark:hover:bg-secondary"
-                  onClick={handleAddClick}
-                >
-                  <Plus className="text-sky-700  dark:text-sky-300" data-icon="inline-start" />
-                  <span className="hidden text-sky-700 font-semibold dark:text-sky-300 sm:inline">{addButtonLabel}</span>
-                </Button>
+                {canAddFromHeader && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="bg-blue-500 text-white hover:bg-blue-600 hover:text-white dark:bg-blue-500 dark:hover:bg-blue-400 dark:hover:text-white"
+                    onClick={handleAddClick}
+                  >
+                    <Plus  data-icon="inline-start" />
+                    <span className="hidden font-semibold sm:inline">{addButtonLabel}</span>
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -905,8 +931,9 @@ export const RadixSidebarDemo = ({
         <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden p-4 pt-0">
           {children}
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </SidebarInset>
+      </SidebarProvider>
+    </TableSearchProvider>
   );
 };
 

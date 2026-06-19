@@ -261,7 +261,7 @@ function Highlight<T extends React.ElementType = 'div'>({
           style={{ position: 'relative', zIndex: 1 }}
           className={(props as ParentModeHighlightProps)?.containerClassName}
         >
-          <AnimatePresence initial={false}>
+          <AnimatePresence initial={false} mode="wait">
             {boundsState && (
               <motion.div
                 data-slot="motion-highlight"
@@ -587,7 +587,7 @@ function HighlightItem<T extends React.ElementType>({
       {...commonHandlers}
     >
       {mode === 'children' && (
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="wait">
           {isActive && !isDisabled && (
             <motion.div
               layoutId={`transition-background-${contextId}`}
