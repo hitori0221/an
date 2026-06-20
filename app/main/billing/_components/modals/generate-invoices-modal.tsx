@@ -105,7 +105,7 @@ function GenerateInvoicesModalContent({
       <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
         <DialogTitle>Generate Invoices</DialogTitle>
         <DialogDescription>
-          Create invoices for active subscribers with installed service dates, skipping subscribers already billed for the period.
+          Create invoices for installed subscribers whose next billing date falls inside the selected period.
         </DialogDescription>
       </DialogHeader>
       <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>

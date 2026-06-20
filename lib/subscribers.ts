@@ -27,6 +27,9 @@ type SubscriberRow = {
   branch_id: string | null
   contract_start: string | null
   contract_end: string | null
+  next_billing_date: string | null
+  due_date: string | null
+  expiration_date: string | null
   subscription_category_id: string | null
   subscription_group_id: string | null
   subscription_plan_id: string | null
@@ -108,6 +111,9 @@ const subscriberSelect = `
   branch_id,
   contract_start,
   contract_end,
+  next_billing_date,
+  due_date,
+  expiration_date,
   subscription_category_id,
   subscription_group_id,
   subscription_plan_id,
@@ -177,6 +183,51 @@ const safeFilePart = (value: string) =>
     .replace(/[^a-z0-9.-]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'contract'
 
+const formatDateValue = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const getTodayDateValue = () => formatDateValue(new Date())
+
+const parseDateValue = (value: string) => {
+  const [yearValue, monthValue, dayValue] = value.split('-').map(Number)
+
+  return new Date(yearValue, monthValue - 1, dayValue)
+}
+
+const getCycleEndDate = (dateValue: string) => {
+  const date = parseDateValue(dateValue)
+
+  return formatDateValue(new Date(date.getFullYear(), date.getMonth() + 1, 0))
+}
+
+const getDefaultDueDate = (nextBillingDate: string) => {
+  const nextBilling = parseDateValue(nextBillingDate)
+  const sameMonthTenth = formatDateValue(new Date(nextBilling.getFullYear(), nextBilling.getMonth(), 10))
+
+  return sameMonthTenth < nextBillingDate ? nextBillingDate : sameMonthTenth
+}
+
+const resolveSubscriberBillingDates = (input: {
+  nextBillingDate: string | null
+  dueDate: string | null
+  expirationDate: string | null
+  contractStart: string | null
+}) => {
+  // These three dates intentionally mean different things:
+  // next_billing_date = when the next invoice should be generated
+  // due_date = when payment is expected for that billing cycle
+  // expiration_date = when service expires if the subscriber does not renew
+  const nextBillingDate = input.nextBillingDate || input.contractStart || getTodayDateValue()
+  const dueDate = input.dueDate || getDefaultDueDate(nextBillingDate)
+  const expirationDate = input.expirationDate || getCycleEndDate(nextBillingDate)
+
+  return {
+    nextBillingDate,
+    dueDate,
+    expirationDate,
+  }
+}
+
 const parseJsonRecord = (value: string): Record<string, string> => {
   if (!value) return {}
 
@@ -216,6 +267,9 @@ const normalizeSubscriber = (subscriber: SubscriberRow): Subscriber => {
     branch: branch?.name ?? '',
     contractStart: subscriber.contract_start ?? '',
     contractEnd: subscriber.contract_end ?? '',
+    nextBillingDate: subscriber.next_billing_date ?? '',
+    dueDate: subscriber.due_date ?? '',
+    expirationDate: subscriber.expiration_date ?? '',
     subscriptionCategoryId: subscriber.subscription_category_id,
     subscriptionGroupId: subscriber.subscription_group_id,
     subscriptionCategory: group?.name ?? category?.name ?? '',
@@ -475,6 +529,12 @@ export async function createSubscriber(formData: FormData) {
 
   const contractPicturePath = await uploadContractPicture(formData, accountNumber)
   const proceedToInstallation = getText(formData, 'proceedToInstallation') === '1'
+  const billingDates = resolveSubscriberBillingDates({
+    nextBillingDate: null,
+    dueDate: null,
+    expirationDate: null,
+    contractStart: getNullableText(formData, 'contractStart'),
+  })
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('subscribers')
@@ -490,6 +550,9 @@ export async function createSubscriber(formData: FormData) {
       branch_id: getNullableText(formData, 'branchId'),
       contract_start: getNullableText(formData, 'contractStart'),
       contract_end: getNullableText(formData, 'contractEnd'),
+      next_billing_date: billingDates.nextBillingDate,
+      due_date: billingDates.dueDate,
+      expiration_date: billingDates.expirationDate,
       subscription_category_id: getNullableText(formData, 'subscriptionCategoryId'),
       subscription_group_id: getNullableText(formData, 'subscriptionGroupId'),
       subscription_plan_id: getNullableText(formData, 'subscriptionPlanId'),
@@ -579,11 +642,88 @@ export async function updateSubscriber(subscriberId: string, formData: FormData)
   return normalizeSubscriber(data as SubscriberRow)
 }
 
+export class SubscriberDeleteConflictError extends Error {
+  constructor() {
+    super(
+      'This subscriber cannot be deleted because they have related installations, job orders, invoices, or payments. Mark the subscriber as Inactive instead.',
+    )
+    this.name = 'SubscriberDeleteConflictError'
+  }
+}
+
 export async function deleteSubscriber(subscriberId: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from('subscribers').delete().eq('id', subscriberId)
+  const { data, error } = await supabase
+    .from('subscribers')
+    .delete()
+    .eq('id', subscriberId)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
+    if (error.code === '23503') {
+      throw new SubscriberDeleteConflictError()
+    }
+
     throw new Error(`Unable to delete subscriber: ${error.message}`)
+  }
+
+  if (!data) {
+    throw new Error('Subscriber was not found or could not be deleted')
+  }
+}
+
+export async function hardDeleteSubscriber(subscriberId: string) {
+  const supabase = await createClient()
+  const [subscriberResult, receiptsResult] = await Promise.all([
+    supabase
+      .from('subscribers')
+      .select('contract_picture_path')
+      .eq('id', subscriberId)
+      .maybeSingle(),
+    supabase
+      .from('billing_payments')
+      .select('receipt_photo_path')
+      .eq('subscriber_id', subscriberId)
+      .not('receipt_photo_path', 'is', null),
+  ])
+
+  if (subscriberResult.error) {
+    throw new Error(`Unable to load subscriber for hard delete: ${subscriberResult.error.message}`)
+  }
+
+  if (!subscriberResult.data) {
+    throw new Error('Subscriber was not found or could not be deleted')
+  }
+
+  if (receiptsResult.error) {
+    throw new Error(`Unable to load payment receipts for hard delete: ${receiptsResult.error.message}`)
+  }
+
+  const { error } = await supabase.rpc('hard_delete_subscriber', {
+    target_subscriber_id: subscriberId,
+  })
+
+  if (error) {
+    throw new Error(`Unable to hard delete subscriber: ${error.message}`)
+  }
+
+  const contractPicturePath = subscriberResult.data.contract_picture_path
+  const receiptPaths = (receiptsResult.data ?? [])
+    .map((receipt) => receipt.receipt_photo_path)
+    .filter((path): path is string => Boolean(path))
+  const cleanupResults = await Promise.all([
+    contractPicturePath
+      ? supabase.storage.from('subscriber-contracts').remove([contractPicturePath])
+      : Promise.resolve({ error: null }),
+    receiptPaths.length > 0
+      ? supabase.storage.from('payment-receipts').remove(receiptPaths)
+      : Promise.resolve({ error: null }),
+  ])
+
+  for (const cleanupResult of cleanupResults) {
+    if (cleanupResult.error) {
+      console.warn(`Subscriber records were deleted, but a stored file could not be removed: ${cleanupResult.error.message}`)
+    }
   }
 }

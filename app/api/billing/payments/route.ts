@@ -35,7 +35,7 @@ async function getPaymentInputFromFormData(request: Request) {
   return {
     invoiceId: getText(formData, 'invoiceId'),
     subscriberId: getText(formData, 'subscriberId'),
-    paidUntil: getText(formData, 'paidUntil'),
+    expirationDate: getText(formData, 'expirationDate'),
     amount: Number(getText(formData, 'amount')),
     paymentDate: getText(formData, 'paymentDate'),
     method: getText(formData, 'method'),

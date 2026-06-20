@@ -46,7 +46,7 @@ const paymentInputToFormData = (input: BillingPaymentInput) => {
 
   formData.set('invoiceId', input.invoiceId ?? '')
   formData.set('subscriberId', input.subscriberId)
-  formData.set('paidUntil', input.paidUntil)
+  formData.set('expirationDate', input.expirationDate)
   formData.set('amount', String(input.amount))
   formData.set('paymentDate', input.paymentDate)
   formData.set('method', input.method)

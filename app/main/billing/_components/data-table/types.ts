@@ -1,6 +1,8 @@
-export type BillingInvoiceStatus = 'Unpaid' | 'Partial' | 'Paid' | 'Void'
+export type BillingInvoiceStatus = 'Unpaid' | 'Partial' | 'Overdue' | 'Paid' | 'Void'
 
 export type BillingPaymentStatus = 'Posted' | 'Void'
+
+export type BillingSubscriptionStatus = 'Active' | 'Overdue' | 'Expired'
 
 export type BillingPaymentMethod =
   | 'Cash'
@@ -19,6 +21,13 @@ export type BillingSubscriberOption = {
   plan: string
   planPrice: number
   address: string
+  nextBillingDate: string
+  nextBillingDateValue: string
+  dueDate: string
+  dueDateValue: string
+  expirationDate: string
+  expirationDateValue: string
+  billingStatus: BillingSubscriptionStatus
 }
 
 export type BillingInvoice = {
@@ -40,6 +49,8 @@ export type BillingInvoice = {
   servicePeriod: string
   dueDate: string
   dueDateValue: string
+  expirationDate: string
+  expirationDateValue: string
   amount: number
   paidAmount: number
   balance: number
@@ -53,6 +64,7 @@ export type BillingInvoiceInput = {
   subscriberId: string
   billingPeriod: string
   dueDate: string
+  expirationDate: string
   amount: number
   notes: string
 }
@@ -88,8 +100,8 @@ export type BillingPayment = {
   amount: number
   paymentDate: string
   paymentDateValue: string
-  paidUntil: string
-  paidUntilValue: string
+  expirationDate: string
+  expirationDateValue: string
   method: BillingPaymentMethod
   referenceNumber: string
   collector: string
@@ -102,7 +114,7 @@ export type BillingPayment = {
 export type BillingPaymentInput = {
   invoiceId?: string
   subscriberId: string
-  paidUntil: string
+  expirationDate: string
   amount: number
   paymentDate: string
   method: BillingPaymentMethod

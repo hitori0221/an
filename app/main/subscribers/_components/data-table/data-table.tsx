@@ -216,6 +216,9 @@ export default function SubscribersDataTable({
   const [subscribers, setSubscribers] = useState<Subscriber[]>(initialSubscribers)
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null)
   const [pendingDeleteSubscriber, setPendingDeleteSubscriber] = useState<Subscriber | null>(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleteMode, setDeleteMode] = useState<'regular' | 'hard' | null>(null)
+  const [deleteIntent, setDeleteIntent] = useState<'regular' | 'hard'>('regular')
   const statusFilter = searchParams.get('status') ?? 'all'
   const planFilter = searchParams.get('plan') ?? 'all'
   const filteredSubscribers = useMemo(
@@ -236,7 +239,16 @@ export default function SubscribersDataTable({
       getSubscriberColumns({
         onView: (subscriber) => router.push(`/main/subscribers/${encodeURIComponent(subscriber.accountNumber)}`),
         onEdit: setEditingSubscriber,
-        onDelete: setPendingDeleteSubscriber,
+        onDelete: (subscriber) => {
+          setDeleteError('')
+          setDeleteIntent('regular')
+          setPendingDeleteSubscriber(subscriber)
+        },
+        onHardDelete: (subscriber) => {
+          setDeleteError('')
+          setDeleteIntent('hard')
+          setPendingDeleteSubscriber(subscriber)
+        },
       }),
     [router],
   )
@@ -302,25 +314,35 @@ export default function SubscribersDataTable({
     return true
   }
 
-  const handleDeleteSubscriber = async () => {
-    if (!pendingDeleteSubscriber) return
+  const handleDeleteSubscriber = async (hardDelete = false) => {
+    if (!pendingDeleteSubscriber || deleteMode) return
 
-    const response = await fetch(`/api/subscribers/${pendingDeleteSubscriber.id}`, {
-      method: 'DELETE',
-    })
+    setDeleteError('')
+    setDeleteMode(hardDelete ? 'hard' : 'regular')
+    try {
+      const query = hardDelete ? '?hard=true' : ''
+      const response = await fetch(`/api/subscribers/${pendingDeleteSubscriber.id}${query}`, {
+        method: 'DELETE',
+      })
 
-    if (!response.ok) {
-      console.error('Unable to delete subscriber', await response.json().catch(() => null))
-      return
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as { error?: string } | null
+        setDeleteError(result?.error ?? 'Unable to delete subscriber. Please try again.')
+        return
+      }
+
+      setSubscribers((currentSubscribers) =>
+        currentSubscribers.filter((subscriber) => subscriber.id !== pendingDeleteSubscriber.id),
+      )
+      setEditingSubscriber((currentSubscriber) =>
+        currentSubscriber?.id === pendingDeleteSubscriber.id ? null : currentSubscriber,
+      )
+      setPendingDeleteSubscriber(null)
+    } catch {
+      setDeleteError('Unable to reach the server. Please try again.')
+    } finally {
+      setDeleteMode(null)
     }
-
-    setSubscribers((currentSubscribers) =>
-      currentSubscribers.filter((subscriber) => subscriber.id !== pendingDeleteSubscriber.id),
-    )
-    setEditingSubscriber((currentSubscriber) =>
-      currentSubscriber?.id === pendingDeleteSubscriber.id ? null : currentSubscriber,
-    )
-    setPendingDeleteSubscriber(null)
   }
 
   return (
@@ -367,22 +389,47 @@ export default function SubscribersDataTable({
       <Dialog
         open={Boolean(pendingDeleteSubscriber)}
         onOpenChange={(open) => {
-          if (!open) setPendingDeleteSubscriber(null)
+          if (!open && !deleteMode) {
+            setDeleteError('')
+            setDeleteIntent('regular')
+            setPendingDeleteSubscriber(null)
+          }
         }}
       >
         <DialogContent className='max-w-[420px]'>
           <DialogHeader>
-            <DialogTitle>Delete subscriber?</DialogTitle>
+            <DialogTitle>{deleteIntent === 'hard' ? 'Hard delete subscriber?' : 'Delete subscriber?'}</DialogTitle>
             <DialogDescription>
-              {pendingDeleteSubscriber?.name} will be removed from the subscribers table.
+              {deleteIntent === 'hard'
+                ? `Permanently remove ${pendingDeleteSubscriber?.name} and all related installations, job orders, invoices, and payments.`
+                : `${pendingDeleteSubscriber?.name} will be removed only if no related records reference this subscriber.`}
             </DialogDescription>
+            {deleteError && (
+              <p role='alert' className='mt-2 text-sm text-destructive'>
+                {deleteError}
+              </p>
+            )}
           </DialogHeader>
           <DialogFooter>
-            <Button type='button' variant='ghost' size='sm' onClick={() => setPendingDeleteSubscriber(null)}>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={() => setPendingDeleteSubscriber(null)}
+              disabled={Boolean(deleteMode)}
+            >
               Cancel
             </Button>
-            <Button type='button' variant='destructive' size='sm' onClick={handleDeleteSubscriber}>
-              Delete
+            <Button
+              type='button'
+              variant={deleteIntent === 'hard' ? 'hardDelete' : 'destructive'}
+              size='sm'
+              onClick={() => handleDeleteSubscriber(deleteIntent === 'hard')}
+              disabled={Boolean(deleteMode)}
+            >
+              {deleteMode
+                ? deleteIntent === 'hard' ? 'Hard deleting...' : 'Deleting...'
+                : deleteIntent === 'hard' ? 'Hard delete' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

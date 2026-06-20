@@ -8,6 +8,7 @@ import type {
   BillingInvoiceGenerationInput,
   BillingInvoiceGenerationResult,
   BillingInvoiceInput,
+  BillingSubscriptionStatus,
   BillingInvoiceVoidAllResult,
   BillingInvoiceStatus,
   BillingPayment,
@@ -30,6 +31,7 @@ type BillingInvoiceRow = {
   service_period_start: string
   service_period_end: string
   due_date: string
+  expiration_date: string
   amount: number | string
   paid_amount: number | string
   balance: number | string
@@ -78,6 +80,9 @@ type BillingSubscriberRow = {
   city: string
   barangay: string
   street_zone: string | null
+  next_billing_date: string
+  due_date: string
+  expiration_date: string
   subscription_plan_id: string | null
   subscription_plans: MaybeArray<{
     id: string
@@ -105,6 +110,7 @@ const invoiceSelect = `
   service_period_start,
   service_period_end,
   due_date,
+  expiration_date,
   amount,
   paid_amount,
   balance,
@@ -153,6 +159,9 @@ const billingSubscriberSelect = `
   city,
   barangay,
   street_zone,
+  next_billing_date,
+  due_date,
+  expiration_date,
   subscription_plan_id,
   subscription_plans (
     id,
@@ -173,6 +182,65 @@ const billingGenerationSubscriberSelect = `
 const currencyNumber = (value: number | string) => Number(value)
 
 const firstRecord = <T>(value: MaybeArray<T>) => (Array.isArray(value) ? value[0] : value)
+
+const formatDateValue = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const getTodayDateValue = () => formatDateValue(new Date())
+
+const parseDateValue = (value: string) => {
+  const [yearValue, monthValue, dayValue] = value.split('-').map(Number)
+
+  return new Date(yearValue, monthValue - 1, dayValue)
+}
+
+const addDaysToDateValue = (value: string, days: number) => {
+  const date = parseDateValue(value)
+  date.setDate(date.getDate() + days)
+
+  return formatDateValue(date)
+}
+
+const addMonthsToDateValue = (value: string, months: number) => {
+  const date = parseDateValue(value)
+  const originalDay = date.getDate()
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1)
+  const lastDayOfTargetMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
+  target.setDate(Math.min(originalDay, lastDayOfTargetMonth))
+
+  return formatDateValue(target)
+}
+
+const getCycleEndDate = (value: string) => {
+  const date = parseDateValue(value)
+
+  return formatDateValue(new Date(date.getFullYear(), date.getMonth() + 1, 0))
+}
+
+const getDefaultDueDate = (nextBillingDate: string) => {
+  const date = parseDateValue(nextBillingDate)
+  const sameMonthTenth = formatDateValue(new Date(date.getFullYear(), date.getMonth(), 10))
+
+  return sameMonthTenth < nextBillingDate ? nextBillingDate : sameMonthTenth
+}
+
+const getInvoiceStatus = ({
+  amount,
+  paidAmount,
+  dueDate,
+}: {
+  amount: number
+  paidAmount: number
+  dueDate: string
+}): BillingInvoiceStatus => {
+  const balance = Math.max(amount - paidAmount, 0)
+
+  if (balance === 0) return 'Paid'
+
+  if (dueDate < getTodayDateValue()) return 'Overdue'
+
+  return paidAmount === 0 ? 'Unpaid' : 'Partial'
+}
 
 const formatDate = (value: string | null) => {
   if (!value) return ''
@@ -208,13 +276,6 @@ const getBillingPeriodRange = (billingPeriod: string) => {
     start: `${yearValue}-${String(monthValue).padStart(2, '0')}-01`,
     end: `${yearValue}-${String(monthValue).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`,
   }
-}
-
-const getInvoiceDueDateForPeriod = (billingPeriod: string) => {
-  const [yearValue, monthValue] = billingPeriod.split('-').map(Number)
-  const dueDay = 10
-
-  return `${yearValue}-${String(monthValue).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`
 }
 
 const formatServicePeriod = (start: string, end: string) => {
@@ -265,10 +326,16 @@ const normalizeInvoice = (invoice: BillingInvoiceRow): BillingInvoice => {
     servicePeriod: formatServicePeriod(invoice.service_period_start, invoice.service_period_end),
     dueDate: formatDate(invoice.due_date),
     dueDateValue: invoice.due_date,
+    expirationDate: formatDate(invoice.expiration_date),
+    expirationDateValue: invoice.expiration_date,
     amount: currencyNumber(invoice.amount),
     paidAmount: currencyNumber(invoice.paid_amount),
     balance: currencyNumber(invoice.balance),
-    status: invoice.status,
+    status: getInvoiceStatus({
+      amount: currencyNumber(invoice.amount),
+      paidAmount: currencyNumber(invoice.paid_amount),
+      dueDate: invoice.due_date,
+    }),
     notes: invoice.notes,
     createdAt: formatDate(invoice.created_at),
     updatedAt: formatDate(invoice.updated_at),
@@ -289,8 +356,8 @@ const normalizePayment = (payment: BillingPaymentRow): BillingPayment => {
     amount: currencyNumber(payment.amount),
     paymentDate: formatDate(payment.payment_date),
     paymentDateValue: payment.payment_date,
-    paidUntil: formatDate(payment.paid_until),
-    paidUntilValue: payment.paid_until,
+    expirationDate: formatDate(payment.paid_until),
+    expirationDateValue: payment.paid_until,
     method: payment.method,
     referenceNumber: payment.reference_number ?? '',
     collector: payment.collector,
@@ -301,7 +368,10 @@ const normalizePayment = (payment: BillingPaymentRow): BillingPayment => {
   }
 }
 
-const normalizeSubscriberOption = (subscriber: BillingSubscriberRow): BillingSubscriberOption => {
+const normalizeSubscriberOption = (
+  subscriber: BillingSubscriberRow,
+  billingStatus: BillingSubscriptionStatus,
+): BillingSubscriberOption => {
   const plan = firstRecord(subscriber.subscription_plans)
 
   return {
@@ -313,6 +383,13 @@ const normalizeSubscriberOption = (subscriber: BillingSubscriberRow): BillingSub
     plan: plan?.name ?? '',
     planPrice: plan ? currencyNumber(plan.price) : 0,
     address: formatAddress(subscriber),
+    nextBillingDate: formatDate(subscriber.next_billing_date),
+    nextBillingDateValue: subscriber.next_billing_date,
+    dueDate: formatDate(subscriber.due_date),
+    dueDateValue: subscriber.due_date,
+    expirationDate: formatDate(subscriber.expiration_date),
+    expirationDateValue: subscriber.expiration_date,
+    billingStatus,
   }
 }
 
@@ -354,22 +431,89 @@ const currentBillingPeriod = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+async function syncBillingInvoiceStatuses() {
+  const supabase = await createClient()
+  const today = getTodayDateValue()
+  const { error } = await supabase
+    .from('billing_invoices')
+    .update({ status: 'Overdue', updated_at: new Date().toISOString() })
+    .lt('due_date', today)
+    .gt('balance', 0)
+    .in('status', ['Unpaid', 'Partial'])
+
+  if (error) {
+    throw new Error(`Unable to refresh overdue invoices: ${error.message}`)
+  }
+}
+
+async function updateSubscriberBillingDates(
+  subscriberId: string,
+  values: {
+    nextBillingDate: string
+    dueDate: string
+    expirationDate: string
+  },
+) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('subscribers')
+    .update({
+      next_billing_date: values.nextBillingDate,
+      due_date: values.dueDate,
+      expiration_date: values.expirationDate,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', subscriberId)
+
+  if (error) {
+    throw new Error(`Unable to update subscriber billing dates: ${error.message}`)
+  }
+}
+
 export async function listBillingSubscribers() {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('subscribers')
-    .select(billingSubscriberSelect)
-    .eq('status', 'Active')
-    .order('created_at', { ascending: false })
+  const [
+    { data, error },
+    { data: invoiceRows, error: invoiceError },
+  ] = await Promise.all([
+    supabase
+      .from('subscribers')
+      .select(billingSubscriberSelect)
+      .eq('status', 'Active')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('billing_invoices')
+      .select('subscriber_id, due_date, balance, status')
+      .in('status', ['Unpaid', 'Partial', 'Overdue']),
+  ])
 
   if (error) {
     throw new Error(`Unable to load billing subscribers: ${error.message}`)
   }
 
-  return ((data ?? []) as BillingSubscriberRow[]).map(normalizeSubscriberOption)
+  if (invoiceError) {
+    throw new Error(`Unable to load billing subscriber statuses: ${invoiceError.message}`)
+  }
+
+  const overdueSubscriberIds = new Set(
+    (invoiceRows ?? [])
+      .filter((invoice) => Number(invoice.balance) > 0 && String(invoice.due_date) < getTodayDateValue())
+      .map((invoice) => String(invoice.subscriber_id)),
+  )
+
+  return ((data ?? []) as BillingSubscriberRow[]).map((subscriber) => {
+    const billingStatus: BillingSubscriptionStatus = subscriber.expiration_date < getTodayDateValue()
+      ? 'Expired'
+      : overdueSubscriberIds.has(subscriber.id)
+        ? 'Overdue'
+        : 'Active'
+
+    return normalizeSubscriberOption(subscriber, billingStatus)
+  })
 }
 
 export async function listBillingInvoices() {
+  await syncBillingInvoiceStatuses()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('billing_invoices')
@@ -386,7 +530,9 @@ export async function listBillingInvoices() {
 export async function listOpenBillingInvoices() {
   const invoices = await listBillingInvoices()
 
-  return invoices.filter((invoice) => invoice.status === 'Unpaid' || invoice.status === 'Partial')
+  return invoices.filter(
+    (invoice) => invoice.status === 'Unpaid' || invoice.status === 'Partial' || invoice.status === 'Overdue',
+  )
 }
 
 export async function listBillingPayments() {
@@ -488,6 +634,10 @@ export async function createBillingInvoice(input: BillingInvoiceInput) {
     throw new Error('Enter a due date')
   }
 
+  if (!input.expirationDate) {
+    throw new Error('Enter an expiration date')
+  }
+
   if (!Number.isFinite(input.amount) || input.amount < 0) {
     throw new Error('Enter a valid invoice amount')
   }
@@ -507,6 +657,11 @@ export async function createBillingInvoice(input: BillingInvoiceInput) {
   const plan = firstRecord(subscriberRow.subscription_plans)
   const invoiceNumber = await getNextInvoiceNumber()
   const servicePeriod = getBillingPeriodRange(input.billingPeriod)
+  const invoiceStatus = getInvoiceStatus({
+    amount: input.amount,
+    paidAmount: 0,
+    dueDate: input.dueDate,
+  })
   const { data, error } = await supabase
     .from('billing_invoices')
     .insert({
@@ -519,10 +674,11 @@ export async function createBillingInvoice(input: BillingInvoiceInput) {
       service_period_start: servicePeriod.start,
       service_period_end: servicePeriod.end,
       due_date: input.dueDate,
+      expiration_date: input.expirationDate,
       amount: input.amount,
       paid_amount: 0,
       balance: input.amount,
-      status: input.amount === 0 ? 'Paid' : 'Unpaid',
+      status: invoiceStatus,
       notes: input.notes,
     })
     .select(invoiceSelect)
@@ -569,17 +725,30 @@ export async function generateBillingInvoices(
   const existingSubscriberIds = new Set(
     (existingRows ?? []).map((invoice) => invoice.subscriber_id as string),
   )
+  const billingPeriodRange = getBillingPeriodRange(input.billingPeriod)
   const subscribers = ((subscriberRows ?? []) as BillingGenerationSubscriberRow[])
   const billableSubscribers = subscribers.filter((subscriber) => {
     const plan = firstRecord(subscriber.subscription_plans)
 
     return Boolean(subscriber.subscription_plan_id && plan)
   })
-  const installedSubscribers = billableSubscribers.filter((subscriber) => Boolean(getInstalledDate(subscriber)))
+  const installedSubscribers = billableSubscribers.filter(
+    (subscriber) => Boolean(getInstalledDate(subscriber)) && Boolean(subscriber.next_billing_date),
+  )
   const subscribersToBill = installedSubscribers.filter((subscriber) => !existingSubscriberIds.has(subscriber.id))
+    .filter(
+      (subscriber) =>
+        subscriber.next_billing_date >= billingPeriodRange.start
+        && subscriber.next_billing_date <= billingPeriodRange.end,
+    )
   const skippedWithoutPlan = subscribers.length - billableSubscribers.length
   const skippedWithoutInstallation = billableSubscribers.length - installedSubscribers.length
-  const skippedExisting = installedSubscribers.length - subscribersToBill.length
+  const scheduledSubscribers = installedSubscribers.filter(
+    (subscriber) =>
+      subscriber.next_billing_date >= billingPeriodRange.start
+      && subscriber.next_billing_date <= billingPeriodRange.end,
+  )
+  const skippedExisting = scheduledSubscribers.length - subscribersToBill.length
 
   if (subscribersToBill.length === 0) {
     return {
@@ -593,11 +762,13 @@ export async function generateBillingInvoices(
   }
 
   const nextSequence = await getNextInvoiceSequence()
-  const servicePeriod = getBillingPeriodRange(input.billingPeriod)
   const rows = subscribersToBill.map((subscriber, index) => {
     const plan = firstRecord(subscriber.subscription_plans)
     const amount = plan ? currencyNumber(plan.price) : 0
     const installedDate = getInstalledDate(subscriber)
+    const servicePeriod = getBillingPeriodRange(input.billingPeriod)
+    const dueDate = subscriber.due_date || getDefaultDueDate(subscriber.next_billing_date)
+    const expirationDate = getCycleEndDate(subscriber.next_billing_date)
 
     if (!installedDate) {
       throw new Error('Subscriber is missing an installed date')
@@ -612,11 +783,16 @@ export async function generateBillingInvoices(
       invoice_date: new Date().toISOString().slice(0, 10),
       service_period_start: servicePeriod.start,
       service_period_end: servicePeriod.end,
-      due_date: getInvoiceDueDateForPeriod(input.billingPeriod),
+      due_date: dueDate,
+      expiration_date: expirationDate,
       amount,
       paid_amount: 0,
       balance: amount,
-      status: amount === 0 ? 'Paid' : 'Unpaid',
+      status: getInvoiceStatus({
+        amount,
+        paidAmount: 0,
+        dueDate,
+      }),
       notes: input.notes,
     }
   })
@@ -793,7 +969,7 @@ export async function createBillingPayment(input: BillingPaymentInput) {
     throw new Error('Select a subscriber')
   }
 
-  if (!input.invoiceId && !input.paidUntil) {
+  if (!input.invoiceId && !input.expirationDate) {
     throw new Error('Enter an expiration date')
   }
 
@@ -815,9 +991,9 @@ export async function createBillingPayment(input: BillingPaymentInput) {
   } else {
     invoiceQuery = invoiceQuery
       .eq('subscriber_id', input.subscriberId)
-      .eq('service_period_end', input.paidUntil)
-      .in('status', ['Unpaid', 'Partial'])
-      .order('service_period_end', { ascending: true })
+      .eq('expiration_date', input.expirationDate)
+      .in('status', ['Unpaid', 'Partial', 'Overdue'])
+      .order('expiration_date', { ascending: true })
       .limit(1)
   }
 
@@ -828,7 +1004,7 @@ export async function createBillingPayment(input: BillingPaymentInput) {
   }
 
   const invoice = normalizeInvoice(invoiceData as BillingInvoiceRow)
-  const paidUntil = input.paidUntil || invoice.servicePeriodEndValue
+  const expirationDate = input.expirationDate || invoice.expirationDateValue
 
   if (invoice.status === 'Paid' || invoice.status === 'Void') {
     throw new Error('Select an unpaid or partially paid billing item')
@@ -838,7 +1014,7 @@ export async function createBillingPayment(input: BillingPaymentInput) {
     throw new Error('Selected subscriber does not match the billing item')
   }
 
-  if (paidUntil !== invoice.servicePeriodEndValue) {
+  if (expirationDate !== invoice.expirationDateValue) {
     throw new Error('Expiration date must match an open billing period')
   }
 
@@ -848,7 +1024,11 @@ export async function createBillingPayment(input: BillingPaymentInput) {
 
   const nextPaidAmount = invoice.paidAmount + input.amount
   const nextBalance = Math.max(invoice.amount - nextPaidAmount, 0)
-  const nextStatus: BillingInvoiceStatus = nextBalance === 0 ? 'Paid' : 'Partial'
+  const nextStatus = getInvoiceStatus({
+    amount: invoice.amount,
+    paidAmount: nextPaidAmount,
+    dueDate: invoice.dueDateValue,
+  })
   const receiptPhotoPath = await uploadPaymentReceipt(input.receiptPhoto, invoice.invoiceNumber)
 
   const { data: paymentData, error: paymentError } = await supabase
@@ -858,7 +1038,7 @@ export async function createBillingPayment(input: BillingPaymentInput) {
       subscriber_id: invoice.subscriberId,
       amount: input.amount,
       payment_date: input.paymentDate,
-      paid_until: paidUntil,
+      paid_until: expirationDate,
       method: input.method,
       reference_number: input.referenceNumber || null,
       collector: input.collector,
@@ -887,6 +1067,14 @@ export async function createBillingPayment(input: BillingPaymentInput) {
 
   if (updateError) {
     throw new Error(`Payment posted, but invoice balance could not be updated: ${updateError.message}`)
+  }
+
+  if (nextStatus === 'Paid') {
+    await updateSubscriberBillingDates(invoice.subscriberId, {
+      nextBillingDate: addDaysToDateValue(expirationDate, 1),
+      dueDate: addMonthsToDateValue(invoice.dueDateValue, 1),
+      expirationDate,
+    })
   }
 
   return {
@@ -945,11 +1133,11 @@ export async function deleteBillingPayment(paymentId: string) {
 
   const nextPaidAmount = Math.max(invoice.paidAmount - payment.amount, 0)
   const nextBalance = Math.max(invoice.amount - nextPaidAmount, 0)
-  const nextStatus: BillingInvoiceStatus = nextBalance === 0
-    ? 'Paid'
-    : nextPaidAmount === 0
-      ? 'Unpaid'
-      : 'Partial'
+  const nextStatus = getInvoiceStatus({
+    amount: invoice.amount,
+    paidAmount: nextPaidAmount,
+    dueDate: invoice.dueDateValue,
+  })
   const { data: updatedInvoiceData, error: updateError } = await supabase
     .from('billing_invoices')
     .update({
@@ -964,6 +1152,34 @@ export async function deleteBillingPayment(paymentId: string) {
 
   if (updateError) {
     throw new Error(`Payment deleted, but invoice balance could not be updated: ${updateError.message}`)
+  }
+
+  if (invoice.status === 'Paid') {
+    const { data: latestPostedPayment, error: latestPaymentError } = await supabase
+      .from('billing_payments')
+      .select('paid_until')
+      .eq('subscriber_id', invoice.subscriberId)
+      .eq('status', 'Posted')
+      .order('paid_until', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestPaymentError) {
+      throw new Error(`Payment deleted, but subscriber billing dates could not be restored: ${latestPaymentError.message}`)
+    }
+
+    const previousExpirationDate = latestPostedPayment?.paid_until
+      ? String(latestPostedPayment.paid_until)
+      : addDaysToDateValue(invoice.servicePeriodStartValue, -1)
+    const nextBillingDate = latestPostedPayment?.paid_until
+      ? addDaysToDateValue(previousExpirationDate, 1)
+      : invoice.servicePeriodStartValue
+
+    await updateSubscriberBillingDates(invoice.subscriberId, {
+      nextBillingDate,
+      dueDate: latestPostedPayment?.paid_until ? getDefaultDueDate(nextBillingDate) : invoice.dueDateValue,
+      expirationDate: previousExpirationDate,
+    })
   }
 
   return {

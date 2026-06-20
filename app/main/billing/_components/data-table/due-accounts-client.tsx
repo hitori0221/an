@@ -54,7 +54,7 @@ const paymentInputToFormData = (input: BillingPaymentInput) => {
 
   formData.set('invoiceId', input.invoiceId ?? '')
   formData.set('subscriberId', input.subscriberId)
-  formData.set('paidUntil', input.paidUntil)
+  formData.set('expirationDate', input.expirationDate)
   formData.set('amount', String(input.amount))
   formData.set('paymentDate', input.paymentDate)
   formData.set('method', input.method)
@@ -88,6 +88,10 @@ function renderInvoiceExpandedRow(row: Row<BillingInvoice>) {
         <div className='flex flex-col gap-1'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Invoice Date</p>
           <p className='text-sm text-foreground'>{row.original.invoiceDate}</p>
+        </div>
+        <div className='flex flex-col gap-1'>
+          <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Expiration</p>
+          <p className='text-sm text-foreground'>{row.original.expirationDate}</p>
         </div>
         <div className='flex flex-col gap-1 lg:col-span-2'>
           <p className='text-[11px] font-medium uppercase tracking-wide text-muted-foreground'>Service Period</p>
@@ -126,10 +130,7 @@ export function DueAccountsClient({
   const isCreateOpen = searchParams.get('create') === '1'
   const totalDue = invoices.reduce((total, invoice) => total + invoice.balance, 0)
   const partialInvoices = invoices.filter((invoice) => invoice.status === 'Partial').length
-  const overdueInvoices = invoices.filter((invoice) => {
-    const dueDate = new Date(invoice.dueDateValue)
-    return dueDate < new Date()
-  }).length
+  const overdueInvoices = invoices.filter((invoice) => invoice.status === 'Overdue').length
 
   const closeCreateModal = () => {
     const params = new URLSearchParams(searchParams.toString())

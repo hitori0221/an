@@ -22,7 +22,7 @@ export const paymentColumnClassNames: Record<string, string> = {
   invoiceNumber: 'w-[15%] min-w-[134px]',
   subscriberName: 'w-[20%] min-w-[168px]',
   paymentDateValue: 'w-[13%] min-w-[112px]',
-  paidUntilValue: 'w-[13%] min-w-[112px]',
+  expirationDateValue: 'w-[13%] min-w-[112px]',
   method: 'w-[14%] min-w-[122px]',
   collector: 'w-[16%] min-w-[132px]',
   receiptPhotoPath: 'w-[10%] min-w-[92px]',
@@ -76,10 +76,10 @@ export const getPaymentColumns = ({
     ),
   },
   {
-    header: ({ column }) => <SortableColumnHeader column={column} title='Paid until' />,
-    accessorKey: 'paidUntilValue',
+    header: ({ column }) => <SortableColumnHeader column={column} title='Expiration' />,
+    accessorKey: 'expirationDateValue',
     cell: ({ row }) => (
-      <span className='block truncate leading-tight text-muted-foreground'>{row.original.paidUntil}</span>
+      <span className='block truncate leading-tight text-muted-foreground'>{row.original.expirationDate}</span>
     ),
   },
   {

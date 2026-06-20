@@ -48,12 +48,14 @@ type SubscriberColumnActions = {
   onView: (subscriber: Subscriber) => void
   onEdit: (subscriber: Subscriber) => void
   onDelete: (subscriber: Subscriber) => void
+  onHardDelete: (subscriber: Subscriber) => void
 }
 
 export const getSubscriberColumns = ({
   onView,
   onEdit,
   onDelete,
+  onHardDelete,
 }: SubscriberColumnActions): ColumnDef<Subscriber>[] => [
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Account Number' />,
@@ -175,6 +177,10 @@ export const getSubscriberColumns = ({
             <DropdownMenuItem variant='destructive' onSelect={() => onDelete(row.original)}>
               <TrashBin />
               Delete
+            </DropdownMenuItem>
+            <DropdownMenuItem variant='hardDelete' onSelect={() => onHardDelete(row.original)}>
+              <TrashBin />
+              Hard delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -65,10 +65,19 @@ const servicePeriodForBillingPeriod = (billingPeriod: string) => {
   return `${formatter.format(start)} - ${formatter.format(end)}`
 }
 
+const expirationDateForBillingPeriod = (billingPeriod: string) => {
+  if (!/^\d{4}-\d{2}$/.test(billingPeriod)) return ''
+
+  const [yearValue, monthValue] = billingPeriod.split('-').map(Number)
+
+  return `${billingPeriod}-${String(new Date(yearValue, monthValue, 0).getDate()).padStart(2, '0')}`
+}
+
 const emptyForm = {
   subscriberId: '',
   billingPeriod: currentBillingPeriod(),
   dueDate: defaultDueDate(),
+  expirationDate: expirationDateForBillingPeriod(currentBillingPeriod()),
   amount: '',
   notes: '',
 }
@@ -127,6 +136,8 @@ function InvoiceModalContent({
       ...current,
       subscriberId,
       amount: subscriber ? String(subscriber.planPrice) : current.amount,
+      dueDate: subscriber?.dueDateValue || current.dueDate,
+      expirationDate: subscriber?.expirationDateValue || current.expirationDate,
     }))
   }
 
@@ -135,6 +146,7 @@ function InvoiceModalContent({
       ...current,
       billingPeriod,
       dueDate: dueDateForBillingPeriod(billingPeriod),
+      expirationDate: expirationDateForBillingPeriod(billingPeriod),
     }))
   }
 
@@ -144,6 +156,7 @@ function InvoiceModalContent({
       !form.subscriberId ||
       !form.billingPeriod ||
       !form.dueDate ||
+      !form.expirationDate ||
       !Number.isFinite(amount) ||
       amount < 0
 
@@ -155,6 +168,7 @@ function InvoiceModalContent({
       subscriberId: form.subscriberId,
       billingPeriod: form.billingPeriod,
       dueDate: form.dueDate,
+      expirationDate: form.expirationDate,
       amount,
       notes: form.notes.trim(),
     })
@@ -205,7 +219,7 @@ function InvoiceModalContent({
         </div>
 
         {selectedSubscriber && (
-          <div className='grid gap-2 rounded-md border bg-muted/20 p-3 text-sm sm:grid-cols-2'>
+          <div className='grid gap-2 rounded-md border bg-muted/20 p-3 text-sm sm:grid-cols-3'>
             <div className='min-w-0'>
               <p className='text-xs text-muted-foreground'>Plan</p>
               <p className='truncate font-medium'>{selectedSubscriber.plan || '-'}</p>
@@ -218,10 +232,22 @@ function InvoiceModalContent({
               <p className='text-xs text-muted-foreground'>Address</p>
               <p className='truncate font-medium'>{selectedSubscriber.address || '-'}</p>
             </div>
+            <div className='min-w-0'>
+              <p className='text-xs text-muted-foreground'>Next billing</p>
+              <p className='truncate font-medium'>{selectedSubscriber.nextBillingDate || '-'}</p>
+            </div>
+            <div className='min-w-0'>
+              <p className='text-xs text-muted-foreground'>Current due</p>
+              <p className='truncate font-medium'>{selectedSubscriber.dueDate || '-'}</p>
+            </div>
+            <div className='min-w-0'>
+              <p className='text-xs text-muted-foreground'>Current expiration</p>
+              <p className='truncate font-medium'>{selectedSubscriber.expirationDate || '-'}</p>
+            </div>
           </div>
         )}
 
-        <div className='grid gap-3 sm:grid-cols-3'>
+        <div className='grid gap-3 sm:grid-cols-4'>
           <div className='flex flex-col gap-1.5'>
             <label className='text-[13px] font-medium sm:text-sm' htmlFor='billing-period'>
               Billing period
@@ -258,9 +284,21 @@ function InvoiceModalContent({
               aria-invalid={showErrors && (!Number.isFinite(Number(form.amount)) || Number(form.amount) < 0)}
             />
           </div>
+          <div className='flex flex-col gap-1.5'>
+            <label className='text-[13px] font-medium sm:text-sm' htmlFor='invoice-expiration-date'>
+              Expiration date
+            </label>
+            <Input
+              id='invoice-expiration-date'
+              type='date'
+              value={form.expirationDate}
+              onChange={(event) => setForm((current) => ({ ...current, expirationDate: event.target.value }))}
+              aria-invalid={showErrors && !form.expirationDate}
+            />
+          </div>
         </div>
-        {showErrors && (!form.billingPeriod || !form.dueDate || !Number.isFinite(Number(form.amount)) || Number(form.amount) < 0) && (
-          <p className='text-xs text-destructive'>Enter a valid period, due date, and amount.</p>
+        {showErrors && (!form.billingPeriod || !form.dueDate || !form.expirationDate || !Number.isFinite(Number(form.amount)) || Number(form.amount) < 0) && (
+          <p className='text-xs text-destructive'>Enter a valid period, due date, expiration date, and amount.</p>
         )}
 
         {servicePeriod && (

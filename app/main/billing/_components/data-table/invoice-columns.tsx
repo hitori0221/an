@@ -39,6 +39,7 @@ export const invoiceColumnClassNames: Record<string, string> = {
 const statusStyles: Record<BillingInvoiceStatus, string> = {
   Unpaid: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   Partial: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  Overdue: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300',
   Paid: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   Void: 'border-muted-foreground/20 bg-muted text-muted-foreground',
 }
