@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Dialog,
@@ -33,7 +33,6 @@ type BranchModalProps = {
 const branchStatuses: BranchStatus[] = ["Active", "Maintenance", "Inactive"];
 
 const emptyForm = {
-<<<<<<< HEAD
   code: "",
   name: "",
   address: "",
@@ -49,12 +48,6 @@ function getInitialForm(branch?: Branch | null) {
         status: branch.status,
       }
     : emptyForm;
-=======
-  code: '',
-  name: '',
-  address: '',
-  status: 'Active' as BranchStatus,
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
 }
 
 export function BranchModal({
@@ -64,31 +57,16 @@ export function BranchModal({
   onCancel,
   onSubmit,
 }: BranchModalProps) {
-<<<<<<< HEAD
   const [form, setForm] = useState(() => getInitialForm(branch));
   const [showErrors, setShowErrors] = useState(false);
   const isEditing = Boolean(branch);
-=======
-  const [form, setForm] = useState(emptyForm)
-  const [showErrors, setShowErrors] = useState(false)
-  const isEditing = Boolean(branch)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
 
-    setForm(
-      branch
-        ? {
-            code: branch.code,
-            name: branch.name,
-            address: branch.address,
-            status: branch.status,
-          }
-        : emptyForm,
-    )
-    setShowErrors(false)
-  }, [branch, open])
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
+    setForm(getInitialForm(branch));
+    setShowErrors(false);
+  }, [branch, open]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -101,20 +79,10 @@ export function BranchModal({
   };
 
   const handleSubmit = () => {
-<<<<<<< HEAD
     const cleanCode = form.code.trim().toUpperCase();
     const cleanName = form.name.trim();
     const cleanAddress = form.address.trim();
     const hasErrors = !cleanCode || !cleanName || !cleanAddress;
-=======
-    const cleanCode = form.code.trim().toUpperCase()
-    const cleanName = form.name.trim()
-    const cleanAddress = form.address.trim()
-    const hasErrors =
-      !cleanCode ||
-      !cleanName ||
-      !cleanAddress
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
 
     setShowErrors(hasErrors);
     if (hasErrors) return;
@@ -144,24 +112,17 @@ export function BranchModal({
         onOpenChange(nextOpen);
       }}
     >
-<<<<<<< HEAD
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[560px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]">
         <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
           <DialogTitle className="text-base">
             {isEditing ? "Edit Branch" : "Add Branch"}
           </DialogTitle>
-=======
-      <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[560px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]'>
-        <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
-          <DialogTitle className='text-base'>{isEditing ? 'Edit Branch' : 'Add Branch'}</DialogTitle>
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
           <DialogDescription>
             {isEditing
               ? "Update the branch details used for coverage and subscriber assignment."
               : "Create a branch location for subscriber and service coverage."}
           </DialogDescription>
         </DialogHeader>
-<<<<<<< HEAD
         <div className="grid flex-1 gap-4 overflow-y-auto px-6 py-4">
           <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
             <div className="grid gap-1.5">
@@ -169,12 +130,6 @@ export function BranchModal({
                 className="text-[13px] font-medium sm:text-sm"
                 htmlFor="branch-code"
               >
-=======
-        <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>
-          <div className='grid gap-3 sm:grid-cols-[140px_1fr]'>
-            <div className='grid gap-1.5'>
-              <label className='text-[13px] font-medium sm:text-sm' htmlFor='branch-code'>
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
                 Branch code
               </label>
               <Input
@@ -241,18 +196,12 @@ export function BranchModal({
               <p className="text-xs text-destructive">Enter a location.</p>
             )}
           </div>
-<<<<<<< HEAD
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <label
                 className="text-[13px] font-medium sm:text-sm"
                 htmlFor="branch-status"
               >
-=======
-          <div className='grid gap-3'>
-            <div className='grid gap-1.5'>
-              <label className='text-[13px] font-medium sm:text-sm' htmlFor='branch-status'>
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
                 Status
               </label>
               <Select
@@ -281,7 +230,6 @@ export function BranchModal({
             </div>
           </div>
         </div>
-<<<<<<< HEAD
         <DialogFooter className="shrink-0 border-t bg-muted/10 px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
           <Button
             type="button"
@@ -289,10 +237,6 @@ export function BranchModal({
             size="sm"
             onClick={handleCancel}
           >
-=======
-        <DialogFooter className='shrink-0 border-t bg-muted/10 px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]'>
-          <Button type='button' variant='ghost' size='sm' onClick={handleCancel}>
->>>>>>> c7f41ec56ab834c4f9783fc97fdd2df76dfb2091
             Cancel
           </Button>
           <Button type="button" size="sm" onClick={handleSubmit}>
