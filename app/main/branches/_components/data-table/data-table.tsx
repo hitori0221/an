@@ -1,7 +1,7 @@
-'use client'
+"use client";
 
-import { useMemo, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   Dialog,
@@ -10,48 +10,55 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/animate-ui/components/radix/dialog'
-import { DataTable } from '@/components/data-table/shared/data-table'
-import { Button } from '@/components/ui/button'
+} from "@/components/animate-ui/components/radix/dialog";
+import { DataTable } from "@/components/data-table/shared/data-table";
+import { Button } from "@/components/ui/button";
 
-import { BranchModal } from '../modals/branch-modal'
-import { branchColumnClassNames, getBranchColumns } from './columns'
-import type { Branch } from './types'
+import { BranchModal } from "../modals/branch-modal";
+import { branchColumnClassNames, getBranchColumns } from "./columns";
+import type { Branch } from "./types";
 
 type BranchesDataTableProps = {
-  initialBranches: Branch[]
-  onBranchesChange?: (branches: Branch[]) => void
-}
+  initialBranches: Branch[];
+  onBranchesChange?: (branches: Branch[]) => void;
+};
 
 export default function BranchesDataTable({
   initialBranches,
   onBranchesChange,
 }: BranchesDataTableProps) {
-  const pathname = usePathname()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [branches, setBranches] = useState(initialBranches)
-  const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
-  const [pendingDeleteBranch, setPendingDeleteBranch] = useState<Branch | null>(null)
-  const isCreateOpen = searchParams.get('create') === '1'
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [branches, setBranches] = useState(initialBranches);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [pendingDeleteBranch, setPendingDeleteBranch] = useState<Branch | null>(
+    null,
+  );
+  const isCreateOpen = searchParams.get("create") === "1";
 
-  const updateBranches = (getBranches: (currentBranches: Branch[]) => Branch[]) => {
+  const updateBranches = (
+    getBranches: (currentBranches: Branch[]) => Branch[],
+  ) => {
     setBranches((currentBranches) => {
-      const nextBranches = getBranches(currentBranches)
-      onBranchesChange?.(nextBranches)
+      const nextBranches = getBranches(currentBranches);
+      onBranchesChange?.(nextBranches);
 
-      return nextBranches
-    })
-  }
+      return nextBranches;
+    });
+  };
 
   const closeCreateModal = () => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(searchParams.toString());
 
-    params.delete('create')
-    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
-      scroll: false,
-    })
-  }
+    params.delete("create");
+    router.replace(
+      params.toString() ? `${pathname}?${params.toString()}` : pathname,
+      {
+        scroll: false,
+      },
+    );
+  };
 
   const columns = useMemo(
     () =>
@@ -60,74 +67,87 @@ export default function BranchesDataTable({
         onDelete: setPendingDeleteBranch,
       }),
     [],
-  )
+  );
 
   const handleDeleteBranch = async () => {
-    if (!pendingDeleteBranch) return
+    if (!pendingDeleteBranch) return;
 
     const response = await fetch(`/api/branches/${pendingDeleteBranch.id}`, {
-      method: 'DELETE',
-    })
+      method: "DELETE",
+    });
 
     if (!response.ok) {
-      console.error('Unable to delete branch', await response.json().catch(() => null))
-      return
+      console.error(
+        "Unable to delete branch",
+        await response.json().catch(() => null),
+      );
+      return;
     }
 
     updateBranches((currentBranches) =>
-      currentBranches.filter((currentBranch) => currentBranch.id !== pendingDeleteBranch.id),
-    )
+      currentBranches.filter(
+        (currentBranch) => currentBranch.id !== pendingDeleteBranch.id,
+      ),
+    );
     setEditingBranch((currentBranch) =>
       currentBranch?.id === pendingDeleteBranch.id ? null : currentBranch,
-    )
-    setPendingDeleteBranch(null)
-  }
+    );
+    setPendingDeleteBranch(null);
+  };
 
   const handleCreateBranch = async (branch: Branch) => {
-    const response = await fetch('/api/branches', {
-      method: 'POST',
+    const response = await fetch("/api/branches", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(branch),
-    })
+    });
 
     if (!response.ok) {
-      console.error('Unable to create branch', await response.json().catch(() => null))
-      return
+      console.error(
+        "Unable to create branch",
+        await response.json().catch(() => null),
+      );
+      return;
     }
 
     const { branch: createdBranch } = (await response.json()) as {
-      branch: Branch
-    }
+      branch: Branch;
+    };
 
-    updateBranches((currentBranches) => [createdBranch, ...currentBranches])
-    closeCreateModal()
-  }
+    updateBranches((currentBranches) => [createdBranch, ...currentBranches]);
+    closeCreateModal();
+  };
 
   const handleUpdateBranch = async (updatedBranch: Branch) => {
     const response = await fetch(`/api/branches/${updatedBranch.id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(updatedBranch),
-    })
+    });
 
     if (!response.ok) {
-      console.error('Unable to update branch', await response.json().catch(() => null))
-      return
+      console.error(
+        "Unable to update branch",
+        await response.json().catch(() => null),
+      );
+      return;
     }
 
     const { branch: savedBranch } = (await response.json()) as {
-      branch: Branch
-    }
+      branch: Branch;
+    };
 
     updateBranches((currentBranches) =>
-      currentBranches.map((branch) => (branch.id === savedBranch.id ? savedBranch : branch)),
-    )
-    setEditingBranch(null)
-  }
+      currentBranches.map((branch) =>
+        branch.id === savedBranch.id ? savedBranch : branch,
+      ),
+    );
+    setEditingBranch(null);
+  };
 
   return (
     <>
@@ -135,22 +155,23 @@ export default function BranchesDataTable({
         columns={columns}
         data={branches}
         columnClassNames={branchColumnClassNames}
-        itemLabel='branches'
-        minWidthClassName='min-w-[892px]'
+        itemLabel="branches"
+        minWidthClassName="min-w-[892px]"
       />
       <BranchModal
         open={isCreateOpen}
         onOpenChange={(open) => {
-          if (!open) closeCreateModal()
+          if (!open) closeCreateModal();
         }}
         onCancel={closeCreateModal}
         onSubmit={handleCreateBranch}
       />
       <BranchModal
+        key={editingBranch?.id ?? "edit-branch"}
         branch={editingBranch}
         open={Boolean(editingBranch)}
         onOpenChange={(open) => {
-          if (!open) setEditingBranch(null)
+          if (!open) setEditingBranch(null);
         }}
         onCancel={() => setEditingBranch(null)}
         onSubmit={handleUpdateBranch}
@@ -158,10 +179,10 @@ export default function BranchesDataTable({
       <Dialog
         open={Boolean(pendingDeleteBranch)}
         onOpenChange={(open) => {
-          if (!open) setPendingDeleteBranch(null)
+          if (!open) setPendingDeleteBranch(null);
         }}
       >
-        <DialogContent className='max-w-[420px]'>
+        <DialogContent className="max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Delete branch?</DialogTitle>
             <DialogDescription>
@@ -169,15 +190,25 @@ export default function BranchesDataTable({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type='button' variant='ghost' size='sm' onClick={() => setPendingDeleteBranch(null)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPendingDeleteBranch(null)}
+            >
               Cancel
             </Button>
-            <Button type='button' variant='destructive' size='sm' onClick={handleDeleteBranch}>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteBranch}
+            >
               Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }

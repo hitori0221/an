@@ -25,4 +25,4 @@ create policy "Authenticated users can manage modems"
   using (true)
   with check (true);
 
-create index if not exists modems_status_idx on public.modems (status);
+create index if not exists modems_status_idx on public.modems (status);;

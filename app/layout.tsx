@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Manrope, Space_Mono } from "next/font/google";
+import { Fredoka, Geist, Manrope, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "./theme-provider";
+import { MotionProvider } from "./motion-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-sans" });
+const fredoka = Fredoka({ subsets: ["latin"], variable: "--font-fredoka" });
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,10 +35,23 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("h-full", "antialiased", geistSans.variable, spaceMono.variable, "font-sans", manrope.variable)}
+      className={cn(
+        "h-full",
+        "antialiased",
+        geistSans.variable,
+        spaceMono.variable,
+        fredoka.variable,
+        "font-sans",
+        manrope.variable,
+      )}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <MotionProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+            <Toaster richColors />
+          </MotionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

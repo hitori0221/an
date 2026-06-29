@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 import { createBillingPayment, listBillingPayments } from '@/lib/billing'
 
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
       ? await getPaymentInputFromFormData(request)
       : await request.json()
     const result = await createBillingPayment(input)
+    revalidatePath('/main', 'layout')
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to create payment'

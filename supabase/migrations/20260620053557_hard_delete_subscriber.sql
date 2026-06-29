@@ -29,11 +29,9 @@ begin
   return true;
 end;
 $$;
-
 revoke all on function public.hard_delete_subscriber(uuid) from public;
 revoke all on function public.hard_delete_subscriber(uuid) from anon;
 grant execute on function public.hard_delete_subscriber(uuid) to authenticated;
 grant execute on function public.hard_delete_subscriber(uuid) to service_role;
-
 comment on function public.hard_delete_subscriber(uuid) is
   'Permanently deletes a subscriber and all dependent operational and billing records in one transaction.';

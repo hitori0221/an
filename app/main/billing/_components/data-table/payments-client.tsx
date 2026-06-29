@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button'
 import { PaymentModal } from '../modals/payment-modal'
 import { getPaymentColumns, paymentColumnClassNames } from './payment-columns'
 import type {
-  BillingInvoice,
   BillingPayment,
   BillingPaymentInput,
   BillingSubscriberOption,
@@ -25,7 +24,6 @@ import type {
 
 type PaymentsClientProps = {
   initialPayments: BillingPayment[]
-  initialOpenInvoices: BillingInvoice[]
   subscribers: BillingSubscriberOption[]
 }
 
@@ -44,7 +42,6 @@ const readApiError = async (response: Response, fallback: string) => {
 const paymentInputToFormData = (input: BillingPaymentInput) => {
   const formData = new FormData()
 
-  formData.set('invoiceId', input.invoiceId ?? '')
   formData.set('subscriberId', input.subscriberId)
   formData.set('expirationDate', input.expirationDate)
   formData.set('amount', String(input.amount))
@@ -63,17 +60,19 @@ const paymentInputToFormData = (input: BillingPaymentInput) => {
 
 export function PaymentsClient({
   initialPayments,
-  initialOpenInvoices,
   subscribers,
 }: PaymentsClientProps) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const branchFilter = searchParams.get('branch') ?? 'all'
   const [payments, setPayments] = useState(initialPayments)
-  const [openInvoices, setOpenInvoices] = useState(initialOpenInvoices)
   const [pendingDeletePayment, setPendingDeletePayment] = useState<BillingPayment | null>(null)
   const isCreateOpen = searchParams.get('create') === '1'
-  const postedPayments = payments.filter((payment) => payment.status === 'Posted')
+  const visiblePayments = branchFilter === 'all'
+    ? payments
+    : payments.filter((payment) => payment.branchId === branchFilter)
+  const postedPayments = visiblePayments.filter((payment) => payment.status === 'Posted')
   const totalPosted = postedPayments.reduce((total, payment) => total + payment.amount, 0)
   const todaysPayments = postedPayments.filter((payment) => {
     const today = new Date().toISOString().slice(0, 10)
@@ -100,18 +99,13 @@ export function PaymentsClient({
       return false
     }
 
-    const { payment, invoice } = (await response.json()) as {
+    const { payment } = (await response.json()) as {
       payment: BillingPayment
-      invoice: BillingInvoice
     }
 
     setPayments((currentPayments) => [payment, ...currentPayments])
-    setOpenInvoices((currentInvoices) =>
-      invoice.status === 'Paid'
-        ? currentInvoices.filter((currentInvoice) => currentInvoice.id !== invoice.id)
-        : currentInvoices.map((currentInvoice) => (currentInvoice.id === invoice.id ? invoice : currentInvoice)),
-    )
     closeCreateModal()
+    router.refresh()
 
     return true
   }
@@ -128,26 +122,11 @@ export function PaymentsClient({
       return
     }
 
-    const { invoice } = (await response.json()) as {
-      payment: BillingPayment
-      invoice: BillingInvoice
-    }
-
     setPayments((currentPayments) =>
       currentPayments.filter((payment) => payment.id !== pendingDeletePayment.id),
     )
-    setOpenInvoices((currentInvoices) => {
-      if (invoice.status === 'Paid' || invoice.status === 'Void') {
-        return currentInvoices.filter((currentInvoice) => currentInvoice.id !== invoice.id)
-      }
-
-      const invoiceExists = currentInvoices.some((currentInvoice) => currentInvoice.id === invoice.id)
-
-      return invoiceExists
-        ? currentInvoices.map((currentInvoice) => (currentInvoice.id === invoice.id ? invoice : currentInvoice))
-        : [invoice, ...currentInvoices]
-    })
     setPendingDeletePayment(null)
+    router.refresh()
   }
 
   const columns = useMemo(
@@ -159,41 +138,39 @@ export function PaymentsClient({
   )
 
   return (
-    <div className='min-w-0 w-full space-y-4'>
-      <div className='flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-end lg:justify-between'>
-        <div className='min-w-0'>
+    <div className='flex min-w-0 w-full flex-col gap-4'>
+      <div className='flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between'>
+        <div className='min-w-0 lg:max-w-md'>
           <h1 className='text-2xl font-semibold leading-tight text-foreground'>Payments</h1>
           <p className='mt-1 max-w-2xl text-sm text-muted-foreground'>
-            Post subscriber payments and keep invoice balances current.
+            Record subscriber payments and update renewal dates directly.
           </p>
         </div>
-      </div>
-
-      <div className='grid gap-3 sm:grid-cols-3'>
-        <div className='rounded-md border bg-background px-4 py-3 shadow-xs'>
-          <p className='text-xs font-medium text-muted-foreground'>Posted payments</p>
-          <p className='mt-1 text-2xl font-semibold'>{postedPayments.length}</p>
-        </div>
-        <div className='rounded-md border bg-background px-4 py-3 shadow-xs'>
-          <p className='text-xs font-medium text-muted-foreground'>Today</p>
-          <p className='mt-1 text-2xl font-semibold'>{currencyFormatter.format(todaysPayments.reduce((total, payment) => total + payment.amount, 0))}</p>
-        </div>
-        <div className='rounded-md border bg-background px-4 py-3 shadow-xs'>
-          <p className='text-xs font-medium text-muted-foreground'>All collected</p>
-          <p className='mt-1 text-2xl font-semibold'>{currencyFormatter.format(totalPosted)}</p>
+        <div className='grid w-full gap-2 sm:grid-cols-3 lg:max-w-2xl lg:flex-1'>
+          <div className='rounded-md border bg-background px-4 py-2.5 shadow-xs'>
+            <p className='text-xs font-medium text-muted-foreground'>Posted payments</p>
+            <p className='mt-0.5 text-xl font-semibold'>{postedPayments.length}</p>
+          </div>
+          <div className='rounded-md border bg-background px-4 py-2.5 shadow-xs'>
+            <p className='text-xs font-medium text-muted-foreground'>Today</p>
+            <p className='mt-0.5 text-xl font-semibold'>{currencyFormatter.format(todaysPayments.reduce((total, payment) => total + payment.amount, 0))}</p>
+          </div>
+          <div className='rounded-md border bg-background px-4 py-2.5 shadow-xs'>
+            <p className='text-xs font-medium text-muted-foreground'>All collected</p>
+            <p className='mt-0.5 text-xl font-semibold'>{currencyFormatter.format(totalPosted)}</p>
+          </div>
         </div>
       </div>
 
       <DataTable
         columns={columns}
-        data={payments}
+        data={visiblePayments}
         columnClassNames={paymentColumnClassNames}
         itemLabel='payments'
         minWidthClassName='min-w-[932px]'
       />
       <PaymentModal
         open={isCreateOpen}
-        invoices={openInvoices}
         subscribers={subscribers}
         onOpenChange={(open) => {
           if (!open) closeCreateModal()
@@ -211,7 +188,7 @@ export function PaymentsClient({
           <DialogHeader>
             <DialogTitle>Delete payment?</DialogTitle>
             <DialogDescription>
-              This will remove {pendingDeletePayment?.invoiceNumber} payment and restore the invoice balance.
+              This will remove the payment record for {pendingDeletePayment?.subscriberName}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

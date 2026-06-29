@@ -17,6 +17,7 @@ import { DataTable } from '@/components/data-table/shared/data-table'
 import { Button } from '@/components/ui/button'
 
 import { CreateSubscriberModal } from '../modals/create-subscriber-modal'
+import type { SubscriberFormSubmitResult } from '../forms/subscriber-form'
 import { getSubscriberColumns, subscriberColumnClassNames } from './columns'
 import type {
   Subscriber,
@@ -262,7 +263,13 @@ export default function SubscribersDataTable({
     })
   }
 
-  const handleCreateSubscriber = async (formData: FormData) => {
+  const getResponseError = async (response: Response, fallback: string) => {
+    const payload = await response.json().catch(() => null)
+
+    return typeof payload?.error === 'string' ? payload.error : fallback
+  }
+
+  const handleCreateSubscriber = async (formData: FormData): Promise<SubscriberFormSubmitResult> => {
     const shouldOpenInstallation = formData.get('proceedToInstallation') === '1'
     const response = await fetch('/api/subscribers', {
       method: 'POST',
@@ -270,8 +277,10 @@ export default function SubscribersDataTable({
     })
 
     if (!response.ok) {
-      console.error('Unable to create subscriber', await response.json().catch(() => null))
-      return false
+      return {
+        ok: false,
+        error: await getResponseError(response, 'Unable to create subscriber. Check the details and try again.'),
+      }
     }
 
     const { subscriber } = (await response.json()) as {
@@ -284,11 +293,13 @@ export default function SubscribersDataTable({
       router.push('/main/installations')
     }
 
-    return true
+    return { ok: true }
   }
 
-  const handleUpdateSubscriber = async (formData: FormData) => {
-    if (!editingSubscriber) return false
+  const handleUpdateSubscriber = async (formData: FormData): Promise<SubscriberFormSubmitResult> => {
+    if (!editingSubscriber) {
+      return { ok: false, error: 'No subscriber is selected for editing.' }
+    }
 
     const response = await fetch(`/api/subscribers/${editingSubscriber.id}`, {
       method: 'PATCH',
@@ -296,8 +307,10 @@ export default function SubscribersDataTable({
     })
 
     if (!response.ok) {
-      console.error('Unable to update subscriber', await response.json().catch(() => null))
-      return false
+      return {
+        ok: false,
+        error: await getResponseError(response, 'Unable to update subscriber. Check the details and try again.'),
+      }
     }
 
     const { subscriber } = (await response.json()) as {
@@ -311,7 +324,7 @@ export default function SubscribersDataTable({
     )
     setEditingSubscriber(null)
 
-    return true
+    return { ok: true }
   }
 
   const handleDeleteSubscriber = async (hardDelete = false) => {
@@ -401,7 +414,7 @@ export default function SubscribersDataTable({
             <DialogTitle>{deleteIntent === 'hard' ? 'Hard delete subscriber?' : 'Delete subscriber?'}</DialogTitle>
             <DialogDescription>
               {deleteIntent === 'hard'
-                ? `Permanently remove ${pendingDeleteSubscriber?.name} and all related installations, job orders, invoices, and payments.`
+                ? `Permanently remove ${pendingDeleteSubscriber?.name} and all related installations, job orders, and payments.`
                 : `${pendingDeleteSubscriber?.name} will be removed only if no related records reference this subscriber.`}
             </DialogDescription>
             {deleteError && (

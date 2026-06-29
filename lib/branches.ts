@@ -7,7 +7,7 @@ type BranchRow = {
   branch_code: string
   name: string
   address: string
-  subscribers: number
+  subscriber_count: { count: number }[] | { count: number } | null
   status: Branch['status']
   updated_at: string
 }
@@ -17,7 +17,7 @@ const branchSelect = `
   branch_code,
   name,
   address,
-  subscribers,
+  subscriber_count:subscribers(count),
   status,
   updated_at
 `
@@ -34,7 +34,9 @@ const normalizeBranch = (branch: BranchRow): Branch => ({
   code: branch.branch_code,
   name: branch.name,
   address: branch.address,
-  subscribers: branch.subscribers,
+  subscribers: Array.isArray(branch.subscriber_count)
+    ? (branch.subscriber_count[0]?.count ?? 0)
+    : (branch.subscriber_count?.count ?? 0),
   status: branch.status,
   updatedAt: formatBranchDate(branch.updated_at),
 })
@@ -61,7 +63,6 @@ export async function createBranch(input: Branch) {
       branch_code: input.code,
       name: input.name,
       address: input.address,
-      subscribers: input.subscribers,
       status: input.status,
     })
     .select(branchSelect)
@@ -82,7 +83,6 @@ export async function updateBranch(input: Branch) {
       branch_code: input.code,
       name: input.name,
       address: input.address,
-      subscribers: input.subscribers,
       status: input.status,
       updated_at: new Date().toISOString(),
     })

@@ -27,9 +27,6 @@ type SubscriberRow = {
   branch_id: string | null
   contract_start: string | null
   contract_end: string | null
-  next_billing_date: string | null
-  due_date: string | null
-  expiration_date: string | null
   subscription_category_id: string | null
   subscription_group_id: string | null
   subscription_plan_id: string | null
@@ -111,9 +108,6 @@ const subscriberSelect = `
   branch_id,
   contract_start,
   contract_end,
-  next_billing_date,
-  due_date,
-  expiration_date,
   subscription_category_id,
   subscription_group_id,
   subscription_plan_id,
@@ -183,51 +177,6 @@ const safeFilePart = (value: string) =>
     .replace(/[^a-z0-9.-]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'contract'
 
-const formatDateValue = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
-const getTodayDateValue = () => formatDateValue(new Date())
-
-const parseDateValue = (value: string) => {
-  const [yearValue, monthValue, dayValue] = value.split('-').map(Number)
-
-  return new Date(yearValue, monthValue - 1, dayValue)
-}
-
-const getCycleEndDate = (dateValue: string) => {
-  const date = parseDateValue(dateValue)
-
-  return formatDateValue(new Date(date.getFullYear(), date.getMonth() + 1, 0))
-}
-
-const getDefaultDueDate = (nextBillingDate: string) => {
-  const nextBilling = parseDateValue(nextBillingDate)
-  const sameMonthTenth = formatDateValue(new Date(nextBilling.getFullYear(), nextBilling.getMonth(), 10))
-
-  return sameMonthTenth < nextBillingDate ? nextBillingDate : sameMonthTenth
-}
-
-const resolveSubscriberBillingDates = (input: {
-  nextBillingDate: string | null
-  dueDate: string | null
-  expirationDate: string | null
-  contractStart: string | null
-}) => {
-  // These three dates intentionally mean different things:
-  // next_billing_date = when the next invoice should be generated
-  // due_date = when payment is expected for that billing cycle
-  // expiration_date = when service expires if the subscriber does not renew
-  const nextBillingDate = input.nextBillingDate || input.contractStart || getTodayDateValue()
-  const dueDate = input.dueDate || getDefaultDueDate(nextBillingDate)
-  const expirationDate = input.expirationDate || getCycleEndDate(nextBillingDate)
-
-  return {
-    nextBillingDate,
-    dueDate,
-    expirationDate,
-  }
-}
-
 const parseJsonRecord = (value: string): Record<string, string> => {
   if (!value) return {}
 
@@ -267,9 +216,6 @@ const normalizeSubscriber = (subscriber: SubscriberRow): Subscriber => {
     branch: branch?.name ?? '',
     contractStart: subscriber.contract_start ?? '',
     contractEnd: subscriber.contract_end ?? '',
-    nextBillingDate: subscriber.next_billing_date ?? '',
-    dueDate: subscriber.due_date ?? '',
-    expirationDate: subscriber.expiration_date ?? '',
     subscriptionCategoryId: subscriber.subscription_category_id,
     subscriptionGroupId: subscriber.subscription_group_id,
     subscriptionCategory: group?.name ?? category?.name ?? '',
@@ -313,6 +259,28 @@ const normalizeCategoryGroup = (group: CategoryGroupRow): SubscriberSubscription
   name: group.name,
   categoryIds: (group.subscription_plan_group_categories ?? []).map((category) => category.category_id),
 })
+
+const getSubscriberSaveErrorMessage = (message: string) => {
+  const normalizedMessage = message.toLowerCase()
+
+  if (normalizedMessage.includes('subscribers_account_number_unique')) {
+    return 'That account number is already assigned to another subscriber. Use a different account number.'
+  }
+
+  if (normalizedMessage.includes('subscribers_status_check')) {
+    return 'The database does not allow the Pending subscriber status yet. Apply the latest migration, then try again.'
+  }
+
+  if (normalizedMessage.includes('foreign key')) {
+    return 'One selected option no longer exists. Refresh the page and choose the branch, plan, modem, and category again.'
+  }
+
+  if (normalizedMessage.includes('row-level security')) {
+    return 'Your account does not have permission to create subscribers for the selected branch.'
+  }
+
+  return `Unable to save subscriber: ${message}`
+}
 
 async function uploadContractPicture(
   formData: FormData,
@@ -529,12 +497,6 @@ export async function createSubscriber(formData: FormData) {
 
   const contractPicturePath = await uploadContractPicture(formData, accountNumber)
   const proceedToInstallation = getText(formData, 'proceedToInstallation') === '1'
-  const billingDates = resolveSubscriberBillingDates({
-    nextBillingDate: null,
-    dueDate: null,
-    expirationDate: null,
-    contractStart: getNullableText(formData, 'contractStart'),
-  })
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('subscribers')
@@ -550,9 +512,6 @@ export async function createSubscriber(formData: FormData) {
       branch_id: getNullableText(formData, 'branchId'),
       contract_start: getNullableText(formData, 'contractStart'),
       contract_end: getNullableText(formData, 'contractEnd'),
-      next_billing_date: billingDates.nextBillingDate,
-      due_date: billingDates.dueDate,
-      expiration_date: billingDates.expirationDate,
       subscription_category_id: getNullableText(formData, 'subscriptionCategoryId'),
       subscription_group_id: getNullableText(formData, 'subscriptionGroupId'),
       subscription_plan_id: getNullableText(formData, 'subscriptionPlanId'),
@@ -569,7 +528,7 @@ export async function createSubscriber(formData: FormData) {
     .single()
 
   if (error) {
-    throw new Error(`Unable to create subscriber: ${error.message}`)
+    throw new Error(getSubscriberSaveErrorMessage(error.message))
   }
 
   const subscriber = normalizeSubscriber(data as SubscriberRow)
@@ -584,7 +543,7 @@ export async function createSubscriber(formData: FormData) {
       })
 
     if (installationError) {
-      throw new Error(`Subscriber created, but unable to create installation: ${installationError.message}`)
+      throw new Error(`Subscriber was created, but the installation record was not: ${installationError.message}`)
     }
   }
 
@@ -636,7 +595,7 @@ export async function updateSubscriber(subscriberId: string, formData: FormData)
     .single()
 
   if (error) {
-    throw new Error(`Unable to update subscriber: ${error.message}`)
+    throw new Error(getSubscriberSaveErrorMessage(error.message))
   }
 
   return normalizeSubscriber(data as SubscriberRow)

@@ -1,17 +1,16 @@
-'use client'
+import { listServiceRequests, type ServiceRequestStatus } from '@/lib/service-requests'
+import { ServiceRequestsClient } from './service-requests-client'
 
-import { useSearchParams } from 'next/navigation'
+export const dynamic = 'force-dynamic'
 
-export default function ServiceRequestPage() {
-  const searchParams = useSearchParams()
-  const category = searchParams.get('category') ?? 'Service Request'
+export default async function ServiceRequestPage({ searchParams }: {
+  searchParams: Promise<{ category?: string; status?: string }>
+}) {
+  const params = await searchParams
+  const category = params.category ?? ''
+  const status: ServiceRequestStatus | 'All' = params.status === 'Verified' || params.status === 'All'
+    ? params.status : 'Pending'
+  const data = category ? await listServiceRequests(category, status) : { category: null, requests: [] }
 
-  return (
-    <div className='min-w-0 w-full'>
-      <div className='rounded-md border bg-background px-5 py-6 shadow-xs'>
-        <h1 className='text-xl font-semibold leading-tight text-foreground'>{category}</h1>
-        <p className='mt-2 text-sm text-muted-foreground'>No service requests yet.</p>
-      </div>
-    </div>
-  )
+  return <ServiceRequestsClient category={data.category?.name ?? category} status={status} requests={data.requests} />
 }

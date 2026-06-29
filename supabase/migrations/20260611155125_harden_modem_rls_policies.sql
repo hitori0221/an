@@ -28,4 +28,4 @@ create policy "Authenticated users can delete modems"
   on public.modems
   for delete
   to authenticated
-  using ((select auth.uid()) is not null);
+  using ((select auth.uid()) is not null);;

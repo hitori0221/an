@@ -14,8 +14,6 @@ export default async function SubscribersPage() {
     modems,
     categoryFields,
   } = await getSubscribersPageData()
-  const activeSubscribers = subscribers.filter((subscriber) => subscriber.status === 'Active').length
-  const uniquePlans = new Set(subscribers.map((subscriber) => subscriber.plan).filter(Boolean)).size
 
   return (
     <div className="min-w-0 w-full space-y-4">

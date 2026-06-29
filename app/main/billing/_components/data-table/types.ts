@@ -21,13 +21,10 @@ export type BillingSubscriberOption = {
   plan: string
   planPrice: number
   address: string
-  nextBillingDate: string
-  nextBillingDateValue: string
-  dueDate: string
-  dueDateValue: string
   expirationDate: string
   expirationDateValue: string
   billingStatus: BillingSubscriptionStatus
+  branchId: string | null
 }
 
 export type BillingInvoice = {
@@ -90,10 +87,15 @@ export type BillingInvoiceVoidAllResult = {
   skippedUnavailable: number
 }
 
+export type BillingInvoiceDeleteAllResult = {
+  deletedIds: string[]
+  deleted: number
+  skippedWithPayments: number
+  skippedUnavailable: number
+}
+
 export type BillingPayment = {
   id: string
-  invoiceId: string
-  invoiceNumber: string
   subscriberId: string
   accountNumber: string
   subscriberName: string
@@ -109,10 +111,10 @@ export type BillingPayment = {
   notes: string
   status: BillingPaymentStatus
   createdAt: string
+  branchId: string | null
 }
 
 export type BillingPaymentInput = {
-  invoiceId?: string
   subscriberId: string
   expirationDate: string
   amount: number
@@ -132,4 +134,17 @@ export type BillingCollectionSummary = {
   paymentCount: number
   totalAmount: number
   lastReferenceNumber: string
+}
+
+export type BillingExpirationAccount = {
+  id: string
+  accountNumber: string
+  subscriberName: string
+  phoneNumber: string
+  plan: string
+  expirationDate: string
+  expirationDateValue: string
+  remainingDays: number
+  billingStatus: BillingSubscriptionStatus
+  branchId: string | null
 }

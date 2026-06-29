@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import Image from 'next/image'
 import { ChevronDown as ChevronDownIcon } from '@gravity-ui/icons'
@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/animate-ui/components/radix/dropdown-menu'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -48,7 +49,12 @@ type SubscriberFormProps = {
   modems: SubscriberModemOption[]
   categoryFields: SubscriberCategoryField[]
   onCancel: () => void
-  onSubmit: (formData: FormData) => Promise<boolean>
+  onSubmit: (formData: FormData) => Promise<SubscriberFormSubmitResult>
+}
+
+export type SubscriberFormSubmitResult = {
+  ok: boolean
+  error?: string
 }
 
 type FormState = {
@@ -154,6 +160,7 @@ export function SubscriberForm({
   const [contractPicture, setContractPicture] = useState<File | null>(null)
   const [showErrors, setShowErrors] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.status === 'Active'),
@@ -249,32 +256,14 @@ export function SubscriberForm({
     [activePlans, selectedCategoryGroupIds, selectedCategoryIds],
   )
 
-  useEffect(() => {
-    setForm(createInitialFormState(nextAccountNumber, subscriber))
-    setCategoryDetails(subscriber?.subscriptionDetails ?? {})
-    setContractPicture(null)
-    setShowErrors(false)
-  }, [nextAccountNumber, subscriber])
-
-  useEffect(() => {
-    setForm((current) =>
-      current.subscriptionPlanId && !availablePlans.some((plan) => plan.id === current.subscriptionPlanId)
-        ? {
-            ...current,
-            subscriptionPlanId: '',
-          }
-        : current,
-    )
-  }, [availablePlans])
-
-  useEffect(() => {
-    setCategoryDetails((currentDetails) =>
-      selectedCategoryFields.reduce<Record<string, string>>((details, field) => {
-        details[field.detailKey] = currentDetails[field.detailKey] ?? ''
-        return details
-      }, {}),
-    )
-  }, [selectedCategoryFields])
+  const selectedPlanId = useMemo(
+    () => (
+      form.subscriptionPlanId && availablePlans.some((plan) => plan.id === form.subscriptionPlanId)
+        ? form.subscriptionPlanId
+        : ''
+    ),
+    [availablePlans, form.subscriptionPlanId],
+  )
 
   const requiredDynamicFieldMissing = selectedCategoryFields.some(
     (field) => field.required && !categoryDetails[field.detailKey]?.trim(),
@@ -288,7 +277,7 @@ export function SubscriberForm({
     !form.barangay.trim() ||
     !form.branchId ||
     (!form.subscriptionCategoryId && !form.subscriptionGroupId) ||
-    !form.subscriptionPlanId ||
+    !selectedPlanId ||
     !form.connectionType ||
     requiredDynamicFieldMissing
 
@@ -327,6 +316,7 @@ export function SubscriberForm({
     setCategoryDetails(subscriber?.subscriptionDetails ?? {})
     setContractPicture(null)
     setShowErrors(false)
+    setSubmitError('')
   }
 
   const handleCancel = () => {
@@ -336,6 +326,7 @@ export function SubscriberForm({
 
   const submitSubscriber = async (proceedToInstallation: boolean) => {
     setShowErrors(true)
+    setSubmitError('')
 
     if (hasErrors || isSubmitting) return
 
@@ -344,7 +335,16 @@ export function SubscriberForm({
       formData.append(key, value)
     })
     formData.set('modemId', form.modemId === NO_MODEM_VALUE ? '' : form.modemId)
-    formData.append('subscriptionDetails', JSON.stringify(categoryDetails))
+    const selectedCategoryDetails = selectedCategoryFields.reduce<Record<string, string>>((details, field) => {
+      const value = categoryDetails[field.detailKey]?.trim()
+
+      if (value) {
+        details[field.detailKey] = value
+      }
+
+      return details
+    }, {})
+    formData.append('subscriptionDetails', JSON.stringify(selectedCategoryDetails))
     if (proceedToInstallation) {
       formData.append('proceedToInstallation', '1')
     }
@@ -353,10 +353,15 @@ export function SubscriberForm({
     }
 
     setIsSubmitting(true)
-    const wasCreated = await onSubmit(formData)
+    const result = await onSubmit(formData)
     setIsSubmitting(false)
 
-    if (wasCreated) resetForm()
+    if (result.ok) {
+      resetForm()
+      return
+    }
+
+    setSubmitError(result.error ?? 'Subscriber could not be saved. Check the details and try again.')
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -443,6 +448,12 @@ export function SubscriberForm({
       <div className='min-h-0 flex-1 overflow-y-auto'>
         <div className='mx-auto grid w-full max-w-6xl gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]'>
           <div className='min-w-0 space-y-6'>
+            {submitError && (
+              <Alert variant='destructive'>
+                <AlertTitle>Subscriber was not saved</AlertTitle>
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            )}
             <section className='space-y-4 border-b pb-5'>
               <div className='grid gap-4 sm:grid-cols-2'>
                 <div className='flex flex-col gap-1.5'>
@@ -800,14 +811,14 @@ export function SubscriberForm({
                     Subscription Plan
                   </label>
                   <Select
-                    value={form.subscriptionPlanId}
+                    value={selectedPlanId}
                     onValueChange={(value) => updateField('subscriptionPlanId', value)}
                     disabled={availablePlans.length === 0}
                   >
                     <SelectTrigger
                       id='subscriber-subscription-plan'
                       className='w-full'
-                      aria-invalid={showErrors && !form.subscriptionPlanId}
+                      aria-invalid={showErrors && !selectedPlanId}
                     >
                       <SelectValue placeholder='Select plan' />
                     </SelectTrigger>
@@ -821,7 +832,7 @@ export function SubscriberForm({
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  {showErrors && !form.subscriptionPlanId && (
+                  {showErrors && !selectedPlanId && (
                     <p className='text-xs text-destructive'>Select a subscription plan.</p>
                   )}
                 </div>

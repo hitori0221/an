@@ -136,8 +136,6 @@ function InvoiceModalContent({
       ...current,
       subscriberId,
       amount: subscriber ? String(subscriber.planPrice) : current.amount,
-      dueDate: subscriber?.dueDateValue || current.dueDate,
-      expirationDate: subscriber?.expirationDateValue || current.expirationDate,
     }))
   }
 
@@ -231,14 +229,6 @@ function InvoiceModalContent({
             <div className='min-w-0 sm:col-span-2'>
               <p className='text-xs text-muted-foreground'>Address</p>
               <p className='truncate font-medium'>{selectedSubscriber.address || '-'}</p>
-            </div>
-            <div className='min-w-0'>
-              <p className='text-xs text-muted-foreground'>Next billing</p>
-              <p className='truncate font-medium'>{selectedSubscriber.nextBillingDate || '-'}</p>
-            </div>
-            <div className='min-w-0'>
-              <p className='text-xs text-muted-foreground'>Current due</p>
-              <p className='truncate font-medium'>{selectedSubscriber.dueDate || '-'}</p>
             </div>
             <div className='min-w-0'>
               <p className='text-xs text-muted-foreground'>Current expiration</p>
