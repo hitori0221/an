@@ -1,0 +1,2 @@
+alter table if exists public.subscription_plan_category_group_categories rename to subscription_plan_group_categories;
+alter table if exists public.subscription_plan_category_groups rename to subscription_plan_groups;;
