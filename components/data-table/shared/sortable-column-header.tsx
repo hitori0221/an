@@ -8,15 +8,18 @@ import {
 } from '@gravity-ui/icons'
 
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 type SortableColumnHeaderProps<TData> = {
   column: Column<TData>
   title: string
+  className?: string
 }
 
 export function SortableColumnHeader<TData>({
   column,
   title,
+  className,
 }: SortableColumnHeaderProps<TData>) {
   const sortDirection = column.getIsSorted()
   const Icon =
@@ -31,7 +34,10 @@ export function SortableColumnHeader<TData>({
       type='button'
       variant='ghost'
       size='sm'
-      className='-ml-2 h-8 px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground'
+      className={cn(
+        '-ml-2 h-8 px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
+        className,
+      )}
       onClick={() => column.toggleSorting(sortDirection === 'asc')}
       aria-label={`Sort by ${title}`}
     >

@@ -105,8 +105,8 @@ export function ModemModal({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className='flex w-[calc(100vw-1rem)] max-w-[520px] flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)]'>
-        <DialogHeader className='border-b p-4 pr-12 sm:p-5'>
+      <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[520px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]'>
+        <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
           <DialogTitle className='text-base'>{isEditing ? 'Edit Modem' : 'Add Modem'}</DialogTitle>
           <DialogDescription>
             {isEditing
@@ -114,7 +114,7 @@ export function ModemModal({
               : 'Create a modem record with a code, name, and status.'}
           </DialogDescription>
         </DialogHeader>
-        <div className='grid gap-4 p-4 sm:p-5'>
+        <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>
           <div className='grid gap-3 sm:grid-cols-[150px_1fr]'>
             <div className='grid gap-1.5'>
               <label className='text-[13px] font-medium sm:text-sm' htmlFor='modem-code'>
@@ -171,7 +171,7 @@ export function ModemModal({
             </Select>
           </div>
         </div>
-        <DialogFooter className='border-t bg-muted/10 p-4 sm:p-4'>
+        <DialogFooter className='shrink-0 border-t bg-muted/10 px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]'>
           <Button type='button' variant='ghost' size='sm' onClick={handleCancel}>
             Cancel
           </Button>

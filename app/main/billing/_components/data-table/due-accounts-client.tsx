@@ -22,10 +22,10 @@ import { PaymentModal } from '../modals/payment-modal'
 import { getInvoiceColumns, invoiceColumnClassNames } from './invoice-columns'
 import type {
   BillingInvoice,
+  BillingInvoiceDeleteAllResult,
   BillingInvoiceGenerationInput,
   BillingInvoiceGenerationResult,
   BillingInvoiceInput,
-  BillingInvoiceVoidAllResult,
   BillingPayment,
   BillingPaymentInput,
   BillingSubscriberOption,
@@ -52,7 +52,6 @@ const readApiError = async (response: Response, fallback: string) => {
 const paymentInputToFormData = (input: BillingPaymentInput) => {
   const formData = new FormData()
 
-  formData.set('invoiceId', input.invoiceId ?? '')
   formData.set('subscriberId', input.subscriberId)
   formData.set('expirationDate', input.expirationDate)
   formData.set('amount', String(input.amount))
@@ -123,10 +122,10 @@ export function DueAccountsClient({
   const [generationResult, setGenerationResult] = useState<BillingInvoiceGenerationResult | null>(
     initialGenerationResult,
   )
-  const [voidAllResult, setVoidAllResult] = useState<BillingInvoiceVoidAllResult | null>(null)
+  const [deleteAllResult, setDeleteAllResult] = useState<BillingInvoiceDeleteAllResult | null>(null)
   const [paymentInvoice, setPaymentInvoice] = useState<BillingInvoice | null>(null)
-  const [pendingVoidInvoice, setPendingVoidInvoice] = useState<BillingInvoice | null>(null)
-  const [isVoidAllOpen, setIsVoidAllOpen] = useState(false)
+  const [pendingDeleteInvoice, setPendingDeleteInvoice] = useState<BillingInvoice | null>(null)
+  const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false)
   const isCreateOpen = searchParams.get('create') === '1'
   const totalDue = invoices.reduce((total, invoice) => total + invoice.balance, 0)
   const partialInvoices = invoices.filter((invoice) => invoice.status === 'Partial').length
@@ -214,30 +213,26 @@ export function DueAccountsClient({
     return true
   }
 
-  const handleVoidInvoice = async () => {
-    if (!pendingVoidInvoice) return
+  const handleDeleteInvoice = async () => {
+    if (!pendingDeleteInvoice) return
 
-    const response = await fetch(`/api/billing/invoices/${pendingVoidInvoice.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ status: 'Void' }),
+    const response = await fetch(`/api/billing/invoices/${pendingDeleteInvoice.id}`, {
+      method: 'DELETE',
     })
 
     if (!response.ok) {
-      console.error('Unable to void invoice', await readApiError(response, 'Unable to void invoice'))
+      console.error('Unable to delete invoice', await readApiError(response, 'Unable to delete invoice'))
       return
     }
 
     setInvoices((currentInvoices) =>
-      currentInvoices.filter((invoice) => invoice.id !== pendingVoidInvoice.id),
+      currentInvoices.filter((invoice) => invoice.id !== pendingDeleteInvoice.id),
     )
-    setPendingVoidInvoice(null)
+    setPendingDeleteInvoice(null)
   }
 
-  const handleVoidAllInvoices = async () => {
-    const response = await fetch('/api/billing/invoices/void-all', {
+  const handleDeleteAllInvoices = async () => {
+    const response = await fetch('/api/billing/invoices/delete-all', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -248,24 +243,24 @@ export function DueAccountsClient({
     })
 
     if (!response.ok) {
-      console.error('Unable to void invoices', await readApiError(response, 'Unable to void invoices'))
+      console.error('Unable to delete invoices', await readApiError(response, 'Unable to delete invoices'))
       return
     }
 
-    const result = (await response.json()) as BillingInvoiceVoidAllResult
+    const result = (await response.json()) as BillingInvoiceDeleteAllResult
 
     setInvoices((currentInvoices) =>
-      currentInvoices.filter((invoice) => !result.voidedIds.includes(invoice.id)),
+      currentInvoices.filter((invoice) => !result.deletedIds.includes(invoice.id)),
     )
-    setVoidAllResult(result)
-    setIsVoidAllOpen(false)
+    setDeleteAllResult(result)
+    setIsDeleteAllOpen(false)
   }
 
   const columns = useMemo(
     () =>
       getInvoiceColumns({
         onPostPayment: setPaymentInvoice,
-        onVoid: setPendingVoidInvoice,
+        onDelete: setPendingDeleteInvoice,
       }),
     [],
   )
@@ -284,11 +279,11 @@ export function DueAccountsClient({
             type='button'
             variant='outline'
             size='sm'
-            onClick={() => setIsVoidAllOpen(true)}
+            onClick={() => setIsDeleteAllOpen(true)}
             disabled={invoices.length === 0}
           >
             <TrashBin data-icon='inline-start' />
-            Void All
+            Delete All
           </Button>
           <Button type='button' variant='outline' size='sm' onClick={() => setIsGenerateOpen(true)}>
             <Plus data-icon='inline-start' />
@@ -303,9 +298,9 @@ export function DueAccountsClient({
         </div>
       )}
 
-      {voidAllResult && (
+      {deleteAllResult && (
         <div className='rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground'>
-          Voided {voidAllResult.voided} invoices, skipped {voidAllResult.skippedWithPayments} with posted payments, and skipped {voidAllResult.skippedUnavailable} unavailable invoices.
+          Deleted {deleteAllResult.deleted} invoices, skipped {deleteAllResult.skippedWithPayments} with payments, and skipped {deleteAllResult.skippedUnavailable} unavailable invoices.
         </div>
       )}
 
@@ -349,8 +344,6 @@ export function DueAccountsClient({
       />
       <PaymentModal
         open={Boolean(paymentInvoice)}
-        initialInvoice={paymentInvoice}
-        invoices={paymentInvoice ? [paymentInvoice] : invoices}
         subscribers={subscribers}
         onOpenChange={(open) => {
           if (!open) setPaymentInvoice(null)
@@ -359,45 +352,45 @@ export function DueAccountsClient({
         onSubmit={handleCreatePayment}
       />
       <Dialog
-        open={Boolean(pendingVoidInvoice)}
+        open={Boolean(pendingDeleteInvoice)}
         onOpenChange={(open) => {
-          if (!open) setPendingVoidInvoice(null)
+          if (!open) setPendingDeleteInvoice(null)
         }}
       >
         <DialogContent className='max-w-[420px]'>
           <DialogHeader>
-            <DialogTitle>Void invoice?</DialogTitle>
+            <DialogTitle>Delete invoice?</DialogTitle>
             <DialogDescription>
-              {pendingVoidInvoice?.invoiceNumber} will be removed from Invoices.
+              {pendingDeleteInvoice?.invoiceNumber} will be permanently removed from Invoices.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type='button' variant='ghost' size='sm' onClick={() => setPendingVoidInvoice(null)}>
+            <Button type='button' variant='ghost' size='sm' onClick={() => setPendingDeleteInvoice(null)}>
               Cancel
             </Button>
-            <Button type='button' variant='destructive' size='sm' onClick={handleVoidInvoice}>
-              Void
+            <Button type='button' variant='destructive' size='sm' onClick={handleDeleteInvoice}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog
-        open={isVoidAllOpen}
-        onOpenChange={setIsVoidAllOpen}
+        open={isDeleteAllOpen}
+        onOpenChange={setIsDeleteAllOpen}
       >
         <DialogContent className='max-w-[440px]'>
           <DialogHeader>
-            <DialogTitle>Void all invoices?</DialogTitle>
+            <DialogTitle>Delete all invoices?</DialogTitle>
             <DialogDescription>
-              This will void every listed invoice that has no posted payments. Invoices with payments will be skipped.
+              This will permanently delete every listed invoice that has no payments. Invoices with payments will be skipped.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type='button' variant='ghost' size='sm' onClick={() => setIsVoidAllOpen(false)}>
+            <Button type='button' variant='ghost' size='sm' onClick={() => setIsDeleteAllOpen(false)}>
               Cancel
             </Button>
-            <Button type='button' variant='destructive' size='sm' onClick={handleVoidAllInvoices}>
-              Void All
+            <Button type='button' variant='destructive' size='sm' onClick={handleDeleteAllInvoices}>
+              Delete All
             </Button>
           </DialogFooter>
         </DialogContent>

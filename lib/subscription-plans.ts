@@ -67,6 +67,10 @@ type SubscriptionPlanRow = {
     | null
 }
 
+type SubscriberPlanCountRow = {
+  subscription_plan_id: string | null
+}
+
 type CategoryGroupRow = {
   id: string
   name: string
@@ -167,6 +171,7 @@ const buildCategoryIconMaps = (
 
 const normalizePlan = (
   plan: SubscriptionPlanRow,
+  subscriberCountByPlanId = new Map<string, number>(),
   categoryIconById = new Map<string, SubscriptionPlanCategoryIcon>(),
   groupCategoryIconsById = new Map<string, SubscriptionPlanCategoryIcon[]>(),
 ): SubscriptionPlan => {
@@ -202,10 +207,36 @@ const normalizePlan = (
     speed: plan.speed,
     channels: plan.channels,
     price: Number(plan.price),
-    subscribers: plan.subscribers,
+    subscribers: subscriberCountByPlanId.get(plan.id) ?? 0,
     status: plan.status,
     updatedAt: formatPlanDate(plan.updated_at),
   }
+}
+
+const buildSubscriberCountByPlanId = (subscribers: SubscriberPlanCountRow[] | null) =>
+  (subscribers ?? []).reduce((counts, subscriber) => {
+    if (!subscriber.subscription_plan_id) return counts
+
+    counts.set(
+      subscriber.subscription_plan_id,
+      (counts.get(subscriber.subscription_plan_id) ?? 0) + 1,
+    )
+
+    return counts
+  }, new Map<string, number>())
+
+const getSubscriberCountByPlanId = async (planId: string) => {
+  const supabase = await createClient()
+  const { count, error } = await supabase
+    .from('subscribers')
+    .select('id', { count: 'exact', head: true })
+    .eq('subscription_plan_id', planId)
+
+  if (error) {
+    throw new Error(`Unable to load subscription plan subscriber count: ${error.message}`)
+  }
+
+  return new Map([[planId, count ?? 0]])
 }
 
 const normalizeCategoryGroup = (group: CategoryGroupRow): SubscriptionPlanCategoryGroup => ({
@@ -238,6 +269,7 @@ export async function getSubscriptionPlansPageData() {
     { data: groupRows, error: groupError },
     { data: planRows, error: planError },
     { data: fieldRows, error: fieldError },
+    { data: subscriberRows, error: subscriberError },
   ] = await Promise.all([
       supabase
         .from('subscription_plan_categories')
@@ -286,6 +318,10 @@ export async function getSubscriptionPlansPageData() {
         .from('subscription_category_fields')
         .select('id, category_id, field_key, label, field_type, placeholder, is_required, options, sort_order')
         .order('sort_order', { ascending: true }),
+      supabase
+        .from('subscribers')
+        .select('subscription_plan_id')
+        .not('subscription_plan_id', 'is', null),
     ])
 
   if (categoryError) {
@@ -304,15 +340,22 @@ export async function getSubscriptionPlansPageData() {
     throw new Error(`Unable to load subscription category fields: ${fieldError.message}`)
   }
 
+  if (subscriberError) {
+    throw new Error(`Unable to load subscription plan subscriber counts: ${subscriberError.message}`)
+  }
+
   const categories = (categoryRows ?? []).map(normalizeCategory)
   const groups = ((groupRows ?? []) as CategoryGroupRow[]).map(normalizeCategoryGroup)
   const { categoryIconById, groupCategoryIconsById } = buildCategoryIconMaps(categories, groups)
+  const subscriberCountByPlanId = buildSubscriberCountByPlanId(
+    (subscriberRows ?? []) as SubscriberPlanCountRow[],
+  )
 
   return {
     categories,
     groups,
     plans: ((planRows ?? []) as SubscriptionPlanRow[]).map((plan) =>
-      normalizePlan(plan, categoryIconById, groupCategoryIconsById),
+      normalizePlan(plan, subscriberCountByPlanId, categoryIconById, groupCategoryIconsById),
     ),
     fields: ((fieldRows ?? []) as CategoryFieldRow[]).map(normalizeCategoryField),
   }
@@ -336,29 +379,28 @@ export async function listServiceRequestCategories(): Promise<ServiceRequestCate
   const supabase = await createClient()
   const [
     { data: categoryRows, error: categoryError },
-    { data: planRows, error: planError },
+    { data: requestRows, error: requestError },
   ] = await Promise.all([
     supabase
       .from('subscription_plan_categories')
       .select('id, name, description, icon_data_url')
       .order('name', { ascending: true }),
     supabase
-      .from('subscription_plans')
-      .select('category_id, group_id'),
+      .from('service_requests')
+      .select('category_id')
+      .eq('status', 'Pending'),
   ])
 
   if (categoryError) {
     throw new Error(`Unable to load service request categories: ${categoryError.message}`)
   }
 
-  if (planError) {
-    throw new Error(`Unable to load service request category counts: ${planError.message}`)
+  if (requestError) {
+    throw new Error(`Unable to load service request category counts: ${requestError.message}`)
   }
 
-  const directPlanCountByCategoryId = (planRows ?? []).reduce<Record<string, number>>((counts, plan) => {
-    if (!plan.category_id || plan.group_id) return counts
-
-    counts[plan.category_id] = (counts[plan.category_id] ?? 0) + 1
+  const pendingCountByCategoryId = (requestRows ?? []).reduce<Record<string, number>>((counts, request) => {
+    counts[request.category_id] = (counts[request.category_id] ?? 0) + 1
 
     return counts
   }, {})
@@ -367,7 +409,7 @@ export async function listServiceRequestCategories(): Promise<ServiceRequestCate
     id: category.id,
     name: category.name,
     iconDataUrl: category.icon_data_url,
-    pendingCount: directPlanCountByCategoryId[category.id] ?? 0,
+    pendingCount: pendingCountByCategoryId[category.id] ?? 0,
   }))
 }
 
@@ -591,6 +633,7 @@ export async function listSubscriptionPlans() {
     { data: categoryRows, error: categoryError },
     { data: groupRows, error: groupError },
     { data, error },
+    { data: subscriberRows, error: subscriberError },
   ] = await Promise.all([
     supabase
       .from('subscription_plan_categories')
@@ -635,6 +678,10 @@ export async function listSubscriptionPlans() {
       `,
       )
       .order('created_at', { ascending: true }),
+    supabase
+      .from('subscribers')
+      .select('subscription_plan_id')
+      .not('subscription_plan_id', 'is', null),
   ])
 
   if (categoryError) {
@@ -649,12 +696,19 @@ export async function listSubscriptionPlans() {
     throw new Error(`Unable to load subscription plans: ${error.message}`)
   }
 
+  if (subscriberError) {
+    throw new Error(`Unable to load subscription plan subscriber counts: ${subscriberError.message}`)
+  }
+
   const categories = (categoryRows ?? []).map(normalizeCategory)
   const groups = ((groupRows ?? []) as CategoryGroupRow[]).map(normalizeCategoryGroup)
   const { categoryIconById, groupCategoryIconsById } = buildCategoryIconMaps(categories, groups)
+  const subscriberCountByPlanId = buildSubscriberCountByPlanId(
+    (subscriberRows ?? []) as SubscriberPlanCountRow[],
+  )
 
   return ((data ?? []) as SubscriptionPlanRow[]).map((plan) =>
-    normalizePlan(plan, categoryIconById, groupCategoryIconsById),
+    normalizePlan(plan, subscriberCountByPlanId, categoryIconById, groupCategoryIconsById),
   )
 }
 
@@ -678,7 +732,6 @@ export async function createSubscriptionPlan(input: SubscriptionPlan) {
       speed: input.speed,
       channels: input.channels,
       price: input.price,
-      subscribers: input.subscribers,
       status: input.status,
     })
     .select(
@@ -711,7 +764,9 @@ export async function createSubscriptionPlan(input: SubscriptionPlan) {
     throw new Error(`Unable to create subscription plan: ${error.message}`)
   }
 
-  return normalizePlan(data as SubscriptionPlanRow)
+  const subscriberCountByPlanId = await getSubscriberCountByPlanId(data.id)
+
+  return normalizePlan(data as SubscriptionPlanRow, subscriberCountByPlanId)
 }
 
 export async function updateSubscriptionPlan(input: SubscriptionPlan) {
@@ -767,7 +822,9 @@ export async function updateSubscriptionPlan(input: SubscriptionPlan) {
     throw new Error(`Unable to update subscription plan: ${error.message}`)
   }
 
-  return normalizePlan(data as SubscriptionPlanRow)
+  const subscriberCountByPlanId = await getSubscriberCountByPlanId(data.id)
+
+  return normalizePlan(data as SubscriptionPlanRow, subscriberCountByPlanId)
 }
 
 export async function deleteSubscriptionPlan(planId: string) {

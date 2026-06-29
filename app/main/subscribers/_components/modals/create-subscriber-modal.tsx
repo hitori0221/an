@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { SubscriberForm } from '../forms/subscriber-form'
+import type { SubscriberFormSubmitResult } from '../forms/subscriber-form'
 import type {
   Subscriber,
   SubscriberBranchOption,
@@ -30,7 +31,7 @@ type CreateSubscriberModalProps = {
   modems: SubscriberModemOption[]
   categoryFields: SubscriberCategoryField[]
   onCancel: () => void
-  onSubmit: (formData: FormData) => Promise<boolean>
+  onSubmit: (formData: FormData) => Promise<SubscriberFormSubmitResult>
 }
 
 export function CreateSubscriberModal({
@@ -84,6 +85,7 @@ export function CreateSubscriberModal({
                   </DialogPrimitive.Description>
                 </div>
                 <SubscriberForm
+                  key={`${subscriber?.id ?? 'create'}:${nextAccountNumber}`}
                   nextAccountNumber={nextAccountNumber}
                   subscriber={subscriber}
                   submitLabel={isEditing ? 'Save Subscriber' : 'Add Subscriber'}

@@ -36,7 +36,6 @@ const emptyForm = {
   code: '',
   name: '',
   address: '',
-  subscribers: '0',
   status: 'Active' as BranchStatus,
 }
 
@@ -60,7 +59,6 @@ export function BranchModal({
             code: branch.code,
             name: branch.name,
             address: branch.address,
-            subscribers: String(branch.subscribers),
             status: branch.status,
           }
         : emptyForm,
@@ -82,13 +80,10 @@ export function BranchModal({
     const cleanCode = form.code.trim().toUpperCase()
     const cleanName = form.name.trim()
     const cleanAddress = form.address.trim()
-    const subscribers = Number(form.subscribers)
     const hasErrors =
       !cleanCode ||
       !cleanName ||
-      !cleanAddress ||
-      !Number.isInteger(subscribers) ||
-      subscribers < 0
+      !cleanAddress
 
     setShowErrors(hasErrors)
     if (hasErrors) return
@@ -98,7 +93,7 @@ export function BranchModal({
       code: cleanCode,
       name: cleanName,
       address: cleanAddress,
-      subscribers,
+      subscribers: branch?.subscribers ?? 0,
       status: form.status,
       updatedAt: new Intl.DateTimeFormat('en-US', {
         month: 'short',
@@ -118,8 +113,8 @@ export function BranchModal({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className='flex w-[calc(100vw-1rem)] max-w-[560px] flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)]'>
-        <DialogHeader className='border-b p-4 pr-12 sm:p-5'>
+      <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[560px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]'>
+        <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
           <DialogTitle className='text-base'>{isEditing ? 'Edit Branch' : 'Add Branch'}</DialogTitle>
           <DialogDescription>
             {isEditing
@@ -127,7 +122,7 @@ export function BranchModal({
               : 'Create a branch location for subscriber and service coverage.'}
           </DialogDescription>
         </DialogHeader>
-        <div className='grid gap-4 p-4 sm:p-5'>
+        <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>
           <div className='grid gap-3 sm:grid-cols-[140px_1fr]'>
             <div className='grid gap-1.5'>
               <label className='text-[13px] font-medium sm:text-sm' htmlFor='branch-code'>
@@ -176,27 +171,7 @@ export function BranchModal({
               <p className='text-xs text-destructive'>Enter a location.</p>
             )}
           </div>
-          <div className='grid gap-3 sm:grid-cols-2'>
-            <div className='grid gap-1.5'>
-              <label className='text-[13px] font-medium sm:text-sm' htmlFor='branch-subscribers'>
-                Subscribers
-              </label>
-              <Input
-                id='branch-subscribers'
-                inputMode='numeric'
-                value={form.subscribers}
-                onChange={(event) => setForm((current) => ({ ...current, subscribers: event.target.value }))}
-                placeholder='0'
-                aria-invalid={
-                  showErrors &&
-                  (!Number.isInteger(Number(form.subscribers)) || Number(form.subscribers) < 0)
-                }
-              />
-              {showErrors &&
-                (!Number.isInteger(Number(form.subscribers)) || Number(form.subscribers) < 0) && (
-                  <p className='text-xs text-destructive'>Enter a valid subscriber count.</p>
-                )}
-            </div>
+          <div className='grid gap-3'>
             <div className='grid gap-1.5'>
               <label className='text-[13px] font-medium sm:text-sm' htmlFor='branch-status'>
                 Status
@@ -221,7 +196,7 @@ export function BranchModal({
             </div>
           </div>
         </div>
-        <DialogFooter className='border-t bg-muted/10 p-4 sm:p-4'>
+        <DialogFooter className='shrink-0 border-t bg-muted/10 px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]'>
           <Button type='button' variant='ghost' size='sm' onClick={handleCancel}>
             Cancel
           </Button>

@@ -52,12 +52,12 @@ const currencyFormatter = new Intl.NumberFormat('en-PH', {
 
 type GetInvoiceColumnsOptions = {
   onPostPayment: (invoice: BillingInvoice) => void
-  onVoid: (invoice: BillingInvoice) => void
+  onDelete: (invoice: BillingInvoice) => void
 }
 
 export const getInvoiceColumns = ({
   onPostPayment,
-  onVoid,
+  onDelete,
 }: GetInvoiceColumnsOptions): ColumnDef<BillingInvoice>[] => [
   {
     header: ({ column }) => <SortableColumnHeader column={column} title='Invoice' />,
@@ -178,10 +178,10 @@ export const getInvoiceColumns = ({
             <DropdownMenuItem
               variant='destructive'
               disabled={row.original.paidAmount > 0 || row.original.status === 'Void'}
-              onClick={() => onVoid(row.original)}
+              onClick={() => onDelete(row.original)}
             >
               <TrashBin />
-              Void invoice
+              Delete invoice
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -66,9 +66,6 @@ export type Subscriber = {
   branch: string
   contractStart: string
   contractEnd: string
-  nextBillingDate: string
-  dueDate: string
-  expirationDate: string
   subscriptionCategoryId: string | null
   subscriptionGroupId: string | null
   subscriptionCategory: string

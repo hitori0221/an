@@ -30,7 +30,6 @@ create table if not exists public.subscribers (
   contract_start date,
   contract_end date,
   subscription_category_id uuid references public.subscription_plan_categories(id) on delete set null,
-  subscription_group_id uuid references public.subscription_plan_groups(id) on delete set null,
   subscription_plan_id uuid references public.subscription_plans(id) on delete set null,
   mac_address text,
   caid text,
@@ -124,7 +123,6 @@ create policy "Authenticated users can delete subscribers"
 create index if not exists subscription_category_fields_category_id_idx on public.subscription_category_fields(category_id);
 create index if not exists subscribers_branch_id_idx on public.subscribers(branch_id);
 create index if not exists subscribers_subscription_category_id_idx on public.subscribers(subscription_category_id);
-create index if not exists subscribers_subscription_group_id_idx on public.subscribers(subscription_group_id);
 create index if not exists subscribers_subscription_plan_id_idx on public.subscribers(subscription_plan_id);
 create index if not exists subscribers_modem_id_idx on public.subscribers(modem_id);
 create index if not exists subscribers_status_idx on public.subscribers(status);
@@ -225,4 +223,4 @@ create policy "Authenticated users can delete subscriber contracts"
   on storage.objects
   for delete
   to authenticated
-  using (bucket_id = 'subscriber-contracts' and (select auth.uid()) is not null);
+  using (bucket_id = 'subscriber-contracts' and (select auth.uid()) is not null);;

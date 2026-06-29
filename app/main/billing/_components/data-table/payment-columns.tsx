@@ -19,10 +19,9 @@ import { cn } from '@/lib/utils'
 import type { BillingPayment, BillingPaymentStatus } from './types'
 
 export const paymentColumnClassNames: Record<string, string> = {
-  invoiceNumber: 'w-[15%] min-w-[134px]',
-  subscriberName: 'w-[20%] min-w-[168px]',
+  subscriberName: 'w-[22%] min-w-[180px]',
   paymentDateValue: 'w-[13%] min-w-[112px]',
-  expirationDateValue: 'w-[13%] min-w-[112px]',
+  expirationDateValue: 'w-[14%] min-w-[120px]',
   method: 'w-[14%] min-w-[122px]',
   collector: 'w-[16%] min-w-[132px]',
   receiptPhotoPath: 'w-[10%] min-w-[92px]',
@@ -50,15 +49,6 @@ export const getPaymentColumns = ({
   onDelete,
 }: GetPaymentColumnsOptions): ColumnDef<BillingPayment>[] => [
   {
-    header: ({ column }) => <SortableColumnHeader column={column} title='Invoice' />,
-    accessorKey: 'invoiceNumber',
-    cell: ({ row }) => (
-      <span className='block truncate text-[13px] font-medium leading-tight text-foreground'>
-        {row.original.invoiceNumber}
-      </span>
-    ),
-  },
-  {
     header: ({ column }) => <SortableColumnHeader column={column} title='Subscriber' />,
     accessorKey: 'subscriberName',
     cell: ({ row }) => (
@@ -76,7 +66,7 @@ export const getPaymentColumns = ({
     ),
   },
   {
-    header: ({ column }) => <SortableColumnHeader column={column} title='Expiration' />,
+    header: ({ column }) => <SortableColumnHeader column={column} title='Expires' />,
     accessorKey: 'expirationDateValue',
     cell: ({ row }) => (
       <span className='block truncate leading-tight text-muted-foreground'>{row.original.expirationDate}</span>
@@ -106,7 +96,11 @@ export const getPaymentColumns = ({
     ),
   },
   {
-    header: ({ column }) => <SortableColumnHeader column={column} title='Amount' />,
+    header: ({ column }) => (
+      <div className='flex justify-end'>
+        <SortableColumnHeader column={column} title='Amount' className='ml-0' />
+      </div>
+    ),
     accessorKey: 'amount',
     cell: ({ row }) => (
       <span className='block text-right font-medium leading-tight text-foreground'>
@@ -143,13 +137,13 @@ export const getPaymentColumns = ({
               type='button'
               variant='ghost'
               size='icon-sm'
-              aria-label={`Open actions for ${row.original.invoiceNumber}`}
+              aria-label={`Open actions for ${row.original.subscriberName}`}
             >
               <MoreHorizontal aria-hidden='true' />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='w-44'>
-            <DropdownMenuLabel>{row.original.invoiceNumber}</DropdownMenuLabel>
+            <DropdownMenuLabel>{row.original.subscriberName}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant='destructive' onClick={() => onDelete(row.original)}>
               <TrashBin />

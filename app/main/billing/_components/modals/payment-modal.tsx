@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { addDays } from 'date-fns'
+import { CalendarIcon, ChevronDownIcon, SearchIcon } from 'lucide-react'
 
 import {
   Dialog,
@@ -12,8 +13,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -22,19 +28,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 import type {
-  BillingInvoice,
   BillingPaymentInput,
   BillingPaymentMethod,
   BillingSubscriberOption,
 } from '../data-table/types'
+import { cn } from '@/lib/utils'
 
 type PaymentModalProps = {
   open: boolean
-  invoices: BillingInvoice[]
   subscribers: BillingSubscriberOption[]
-  initialInvoice?: BillingInvoice | null
+  defaultSubscriberId?: string
   onOpenChange: (open: boolean) => void
   onCancel: () => void
   onSubmit: (payment: BillingPaymentInput) => Promise<boolean>
@@ -54,11 +64,83 @@ const todayValue = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
+const formatDateValue = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const parseDateValue = (value: string) => {
+  if (!value) return undefined
+
+  const [yearValue, monthValue, dayValue] = value.split('-').map(Number)
+  if (!yearValue || !monthValue || !dayValue) return undefined
+
+  return new Date(yearValue, monthValue - 1, dayValue)
+}
+
+const displayDate = (value: string) => {
+  const date = parseDateValue(value)
+
+  if (!date) return 'Pick a date'
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
+type DatePickerFieldProps = {
+  id: string
+  value: string
+  invalid: boolean
+  onChange: (value: string) => void
+}
+
+function DatePickerField({
+  id,
+  value,
+  invalid,
+  onChange,
+}: DatePickerFieldProps) {
+  const [open, setOpen] = useState(false)
+  const date = parseDateValue(value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type='button'
+          variant='outline'
+          className={cn(
+            'h-10 w-full justify-start bg-background/40 text-left font-normal',
+            !value && 'text-muted-foreground',
+          )}
+          aria-invalid={invalid}
+        >
+          <CalendarIcon data-icon='inline-start' />
+          {displayDate(value)}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align='start' className='w-auto p-0'>
+        <Calendar
+          mode='single'
+          selected={date}
+          onSelect={(nextDate) => {
+            if (!nextDate) return
+
+            onChange(formatDateValue(nextDate))
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function PaymentModal({
   open,
-  invoices,
   subscribers,
-  initialInvoice,
+  defaultSubscriberId = '',
   onOpenChange,
   onCancel,
   onSubmit,
@@ -67,10 +149,8 @@ export function PaymentModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
         <PaymentModalContent
-          key={initialInvoice?.id ?? 'create'}
-          invoices={invoices}
           subscribers={subscribers}
-          initialInvoice={initialInvoice}
+          defaultSubscriberId={defaultSubscriberId}
           onCancel={onCancel}
           onSubmit={onSubmit}
         />
@@ -79,23 +159,19 @@ export function PaymentModal({
   )
 }
 
-type PaymentModalContentProps = Pick<
-  PaymentModalProps,
-  'invoices' | 'subscribers' | 'initialInvoice' | 'onCancel' | 'onSubmit'
->
+type PaymentModalContentProps = Pick<PaymentModalProps, 'subscribers' | 'defaultSubscriberId' | 'onCancel' | 'onSubmit'>
 
 function PaymentModalContent({
-  invoices,
   subscribers,
-  initialInvoice,
+  defaultSubscriberId = '',
   onCancel,
   onSubmit,
 }: PaymentModalContentProps) {
+  const defaultSubscriber = subscribers.find((subscriber) => subscriber.id === defaultSubscriberId)
   const [form, setForm] = useState(() => ({
-    subscriberId: initialInvoice?.subscriberId ?? '',
-    invoiceId: initialInvoice?.id ?? '',
-    amount: initialInvoice ? String(initialInvoice.balance) : '',
-    expirationDate: initialInvoice?.expirationDateValue ?? '',
+    subscriberId: defaultSubscriber?.id ?? '',
+    amount: '',
+    expirationDate: defaultSubscriber?.expirationDateValue ?? '',
     paymentDate: todayValue(),
     method: 'Cash' as BillingPaymentMethod,
     referenceNumber: '',
@@ -105,47 +181,42 @@ function PaymentModalContent({
   }))
   const [showErrors, setShowErrors] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [subscriberPickerOpen, setSubscriberPickerOpen] = useState(false)
+  const [subscriberSearch, setSubscriberSearch] = useState('')
   const selectedSubscriber = useMemo(
     () => subscribers.find((subscriber) => subscriber.id === form.subscriberId),
     [form.subscriberId, subscribers],
   )
-  const invoiceOptions = useMemo(
-    () =>
-      invoices
-        .filter((invoice) => invoice.subscriberId === form.subscriberId)
-        .sort((first, second) => first.expirationDateValue.localeCompare(second.expirationDateValue)),
-    [form.subscriberId, invoices],
-  )
-  const selectedInvoice = useMemo(
-    () =>
-      invoices.find((invoice) => invoice.id === form.invoiceId) ??
-      invoiceOptions.find((invoice) => invoice.expirationDateValue === form.expirationDate),
-    [form.expirationDate, form.invoiceId, invoiceOptions, invoices],
-  )
-  const hasNoOpenInvoice = Boolean(form.subscriberId && invoiceOptions.length === 0)
+  const visibleSubscribers = useMemo(() => {
+    const normalizedSearch = subscriberSearch.trim().toLowerCase()
+    const matchingSubscribers = normalizedSearch
+      ? subscribers.filter((subscriber) =>
+          [
+            subscriber.name,
+            subscriber.accountNumber,
+            subscriber.phoneNumber,
+            subscriber.plan,
+          ]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(normalizedSearch)),
+        )
+      : subscribers
+
+    return matchingSubscribers.slice(0, 5)
+  }, [subscriberSearch, subscribers])
+  const expirationInThirtyDays = addDays(parseDateValue(form.expirationDate) ?? new Date(), 30)
+  const expirationInThirtyDaysValue = formatDateValue(expirationInThirtyDays)
+  const expirationInThirtyDaysLabel = displayDate(expirationInThirtyDaysValue)
 
   const handleSubscriberChange = (subscriberId: string) => {
-    const firstInvoice = invoices
-      .filter((invoice) => invoice.subscriberId === subscriberId)
-      .sort((first, second) => first.expirationDateValue.localeCompare(second.expirationDateValue))[0]
+    const subscriber = subscribers.find((option) => option.id === subscriberId)
 
+    setSubscriberPickerOpen(false)
+    setSubscriberSearch('')
     setForm((current) => ({
       ...current,
       subscriberId,
-      invoiceId: firstInvoice?.id ?? '',
-      expirationDate: firstInvoice?.expirationDateValue ?? '',
-      amount: firstInvoice ? String(firstInvoice.balance) : '',
-    }))
-  }
-
-  const handleExpirationDateChange = (expirationDate: string) => {
-    const invoice = invoiceOptions.find((option) => option.expirationDateValue === expirationDate)
-
-    setForm((current) => ({
-      ...current,
-      expirationDate,
-      invoiceId: invoice?.id ?? '',
-      amount: invoice ? String(invoice.balance) : current.amount,
+      expirationDate: subscriber?.expirationDateValue ?? '',
     }))
   }
 
@@ -160,18 +231,15 @@ function PaymentModalContent({
     const hasErrors =
       !form.subscriberId ||
       !form.expirationDate ||
-      !selectedInvoice ||
       !form.paymentDate ||
       !Number.isFinite(amount) ||
-      amount <= 0 ||
-      Boolean(selectedInvoice && amount > selectedInvoice.balance)
+      amount <= 0
 
     setShowErrors(hasErrors)
     if (hasErrors || isSaving) return
 
     setIsSaving(true)
     const wasSaved = await onSubmit({
-      invoiceId: form.invoiceId,
       subscriberId: form.subscriberId,
       expirationDate: form.expirationDate,
       amount,
@@ -190,11 +258,11 @@ function PaymentModalContent({
   }
 
   return (
-    <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[640px] flex-col overflow-hidden gap-0 p-0 sm:max-h-[calc(100dvh-4rem)]'>
+    <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-[640px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-4rem)]'>
       <DialogHeader className='shrink-0 border-b px-6 py-4 pr-12'>
         <DialogTitle>Post Payment</DialogTitle>
         <DialogDescription>
-          Record a subscriber payment against the selected renewal expiration date.
+          Record a subscriber payment and its service expiration date.
         </DialogDescription>
       </DialogHeader>
       <div className='grid flex-1 gap-4 overflow-y-auto px-6 py-4'>
@@ -203,85 +271,128 @@ function PaymentModalContent({
             <label className='text-[13px] font-medium sm:text-sm' htmlFor='payment-subscriber'>
               Subscriber
             </label>
-            <Select
-              value={form.subscriberId}
-              onValueChange={handleSubscriberChange}
-              disabled={Boolean(initialInvoice)}
-            >
-              <SelectTrigger id='payment-subscriber' className='h-10 w-full bg-background/40'>
-                <SelectValue placeholder='Select subscriber' />
-              </SelectTrigger>
-              <SelectContent className='w-[var(--radix-select-trigger-width)] min-w-[340px]'>
-                <SelectGroup>
-                  {subscribers.map((subscriber) => (
-                    <SelectItem key={subscriber.id} value={subscriber.id}>
-                      {subscriber.name} - {subscriber.accountNumber}
-                    </SelectItem>
+            <Popover open={subscriberPickerOpen} onOpenChange={setSubscriberPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id='payment-subscriber'
+                  type='button'
+                  variant='outline'
+                  role='combobox'
+                  aria-expanded={subscriberPickerOpen}
+                  className={cn(
+                    'h-10 w-full justify-between bg-background/40 px-3 text-left font-normal',
+                    !selectedSubscriber && 'text-muted-foreground',
+                  )}
+                >
+                  <span className='truncate'>
+                    {selectedSubscriber
+                      ? `${selectedSubscriber.name} - ${selectedSubscriber.accountNumber}`
+                      : 'Select subscriber'}
+                  </span>
+                  <ChevronDownIcon data-icon='inline-end' />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align='start' className='w-[var(--radix-popover-trigger-width)] min-w-[340px] gap-1 p-1'>
+                <div>
+                  <div className='relative'>
+                    <SearchIcon className='pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground' />
+                    <Input
+                      aria-label='Search subscribers'
+                      className='h-8 pl-7 text-sm'
+                      placeholder='Search name, account, phone'
+                      value={subscriberSearch}
+                      onChange={(event) => setSubscriberSearch(event.target.value)}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    />
+                  </div>
+                </div>
+                <div className='flex max-h-56 flex-col gap-1 overflow-y-auto'>
+                  {visibleSubscribers.map((subscriber) => (
+                    <Button
+                      key={subscriber.id}
+                      type='button'
+                      variant='ghost'
+                      className='h-auto justify-start px-2 py-2 text-left font-normal'
+                      onClick={() => handleSubscriberChange(subscriber.id)}
+                    >
+                      <span className='grid min-w-0 gap-0.5'>
+                        <span className='truncate font-medium'>
+                          {subscriber.name} - {subscriber.accountNumber}
+                        </span>
+                        <span className='truncate text-xs text-muted-foreground'>
+                          {[subscriber.phoneNumber, subscriber.plan].filter(Boolean).join(' | ') || 'No details'}
+                        </span>
+                      </span>
+                    </Button>
                   ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+                  {visibleSubscribers.length === 0 && (
+                    <div className='px-2 py-2 text-sm text-muted-foreground'>
+                      No subscribers found
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className='flex flex-col gap-1.5'>
-            <label className='text-[13px] font-medium sm:text-sm' htmlFor='payment-paid-until'>
-              Expiration date
-            </label>
-            <Input
-              id='payment-paid-until'
-              type='date'
+            <div className='flex items-center justify-between gap-2'>
+              <label className='text-[13px] font-medium sm:text-sm' htmlFor='payment-expires'>
+                Expires
+              </label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='xs'
+                    aria-label={`Add 30 days, setting expiration to ${expirationInThirtyDaysLabel}`}
+                    onClick={() => setForm((current) => ({
+                      ...current,
+                      expirationDate: formatDateValue(addDays(
+                        parseDateValue(current.expirationDate) ?? new Date(),
+                        30,
+                      )),
+                    }))}
+                  >
+                    +30 days
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side='top'>
+                  Next expiration: {expirationInThirtyDaysLabel}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <DatePickerField
+              id='payment-expires'
               value={form.expirationDate}
-              onChange={(event) => handleExpirationDateChange(event.target.value)}
-              disabled={!form.subscriberId || hasNoOpenInvoice || Boolean(initialInvoice)}
-              aria-invalid={showErrors && (!form.expirationDate || !selectedInvoice)}
+              invalid={showErrors && !form.expirationDate}
+              onChange={(expirationDate) => setForm((current) => ({ ...current, expirationDate }))}
             />
           </div>
         </div>
 
-        {hasNoOpenInvoice && (
-          <Alert variant='destructive'>
-            <CircleAlert />
-            <AlertTitle>No open invoice found</AlertTitle>
-            <AlertDescription>
-              This subscriber has no unpaid or partially paid invoice. Generate an invoice in Due Accounts before
-              posting a payment.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {(selectedSubscriber || selectedInvoice) && (
+        {selectedSubscriber && (
           <div className='grid gap-2 rounded-md border bg-muted/20 p-3 text-sm sm:grid-cols-4'>
             <div className='min-w-0'>
               <p className='text-xs text-muted-foreground'>Account</p>
-              <p className='truncate font-mono font-medium'>{selectedSubscriber?.accountNumber || selectedInvoice?.accountNumber || '-'}</p>
+              <p className='truncate font-mono font-medium'>{selectedSubscriber.accountNumber}</p>
             </div>
             <div className='min-w-0'>
               <p className='text-xs text-muted-foreground'>Plan</p>
-              <p className='truncate font-medium'>{selectedSubscriber?.plan || selectedInvoice?.plan || '-'}</p>
+              <p className='truncate font-medium'>{selectedSubscriber.plan || '-'}</p>
             </div>
             <div className='min-w-0'>
-              <p className='text-xs text-muted-foreground'>Balance</p>
-              <p className='truncate font-medium'>
-                {selectedInvoice ? `PHP ${selectedInvoice.balance.toLocaleString('en-PH')}` : '-'}
-              </p>
+              <p className='text-xs text-muted-foreground'>Status</p>
+              <p className='truncate font-medium'>{selectedSubscriber.billingStatus}</p>
             </div>
             <div className='min-w-0'>
-              <p className='text-xs text-muted-foreground'>Billing item</p>
-              <p className='truncate font-medium'>{selectedInvoice?.invoiceNumber ?? '-'}</p>
-            </div>
-            <div className='min-w-0 sm:col-span-2'>
-              <p className='text-xs text-muted-foreground'>Subscriber status</p>
-              <p className='truncate font-medium'>{selectedSubscriber?.billingStatus ?? '-'}</p>
+              <p className='text-xs text-muted-foreground'>Phone</p>
+              <p className='truncate font-medium'>{selectedSubscriber.phoneNumber || '-'}</p>
             </div>
             <div className='min-w-0 sm:col-span-2'>
               <p className='text-xs text-muted-foreground'>Current expiration</p>
-              <p className='truncate font-medium'>{selectedSubscriber?.expirationDate ?? selectedInvoice?.expirationDate ?? '-'}</p>
+              <p className='truncate font-medium'>{selectedSubscriber.expirationDate || '-'}</p>
             </div>
-            {selectedInvoice && (
-              <div className='min-w-0 sm:col-span-4'>
-                <p className='text-xs text-muted-foreground'>Service period</p>
-                <p className='truncate font-medium'>{selectedInvoice.servicePeriod}</p>
-              </div>
-            )}
           </div>
         )}
 
@@ -295,7 +406,6 @@ function PaymentModalContent({
               inputMode='decimal'
               value={form.amount}
               onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
-              disabled={hasNoOpenInvoice}
               aria-invalid={showErrors && (!Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0)}
             />
           </div>
@@ -303,13 +413,11 @@ function PaymentModalContent({
             <label className='text-[13px] font-medium sm:text-sm' htmlFor='payment-date'>
               Payment date
             </label>
-            <Input
+            <DatePickerField
               id='payment-date'
-              type='date'
               value={form.paymentDate}
-              onChange={(event) => setForm((current) => ({ ...current, paymentDate: event.target.value }))}
-              disabled={hasNoOpenInvoice}
-              aria-invalid={showErrors && !form.paymentDate}
+              invalid={showErrors && !form.paymentDate}
+              onChange={(paymentDate) => setForm((current) => ({ ...current, paymentDate }))}
             />
           </div>
           <div className='flex flex-col gap-1.5'>
@@ -319,7 +427,6 @@ function PaymentModalContent({
             <Select
               value={form.method}
               onValueChange={(value) => setForm((current) => ({ ...current, method: value as BillingPaymentMethod }))}
-              disabled={hasNoOpenInvoice}
             >
               <SelectTrigger id='payment-method' className='h-10 w-full bg-background/40'>
                 <SelectValue />
@@ -338,7 +445,7 @@ function PaymentModalContent({
         </div>
         {showErrors && (
           <p className='text-xs text-destructive'>
-            Select a subscriber, choose an invoice expiration date, and enter a valid amount.
+            Select a subscriber, choose an expiration date, and enter a valid amount.
           </p>
         )}
 
@@ -351,7 +458,6 @@ function PaymentModalContent({
               id='payment-reference'
               value={form.referenceNumber}
               onChange={(event) => setForm((current) => ({ ...current, referenceNumber: event.target.value }))}
-              disabled={hasNoOpenInvoice}
             />
           </div>
           <div className='flex flex-col gap-1.5'>
@@ -362,7 +468,6 @@ function PaymentModalContent({
               id='payment-collector'
               value={form.collector}
               onChange={(event) => setForm((current) => ({ ...current, collector: event.target.value }))}
-              disabled={hasNoOpenInvoice}
             />
           </div>
         </div>
@@ -375,7 +480,6 @@ function PaymentModalContent({
             id='payment-receipt-photo'
             type='file'
             accept='image/jpeg,image/png,image/webp'
-            disabled={hasNoOpenInvoice}
             onChange={(event) => {
               const file = event.target.files?.[0] ?? null
               setForm((current) => ({ ...current, receiptPhoto: file }))
@@ -394,7 +498,6 @@ function PaymentModalContent({
             id='payment-notes'
             value={form.notes}
             onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-            disabled={hasNoOpenInvoice}
             className='min-h-20 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
           />
         </div>
@@ -403,7 +506,7 @@ function PaymentModalContent({
         <Button type='button' variant='ghost' size='sm' onClick={handleCancel} disabled={isSaving}>
           Cancel
         </Button>
-        <Button type='button' size='sm' onClick={handleSubmit} disabled={isSaving || hasNoOpenInvoice}>
+        <Button type='button' size='sm' onClick={handleSubmit} disabled={isSaving}>
           {isSaving ? 'Saving...' : 'Post payment'}
         </Button>
       </DialogFooter>
