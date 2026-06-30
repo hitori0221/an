@@ -1,27 +1,31 @@
-"use client"
+"use client";
 
-import { useActionState } from "react"
+import { useActionState } from "react";
 
-import { login } from "@/app/login/actions"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { login } from "@/app/login/actions";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   FieldError,
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
-  const [state, formAction, pending] = useActionState(login, undefined)
+  const [state, formAction, pending] = useActionState(login, undefined);
 
   return (
-    <form action={formAction} className={cn("flex flex-col gap-6", className)} {...props}>
+    <form
+      action={formAction}
+      className={cn("flex flex-col gap-6", className)}
+      {...props}
+    >
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">Login to your account</h1>
@@ -35,6 +39,7 @@ export function LoginForm({
             id="email"
             name="email"
             type="email"
+            defaultValue="demo@gmail.com"
             placeholder="m@example.com"
             autoComplete="email"
             required
@@ -55,6 +60,7 @@ export function LoginForm({
             id="password"
             name="password"
             type="password"
+            defaultValue="12345678"
             autoComplete="current-password"
             required
             className="bg-background"
@@ -69,9 +75,9 @@ export function LoginForm({
           </Button>
         </Field>
         <FieldDescription className="text-center">
-          Use the account you created in Supabase.
+          Enter the email and password provided by your administrator.
         </FieldDescription>
       </FieldGroup>
     </form>
-  )
+  );
 }

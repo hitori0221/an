@@ -131,10 +131,12 @@ const DATA = {
         {
           title: "Dashboard",
           url: "/main/overview",
+          resource: "dashboard",
         },
         {
           title: "Manager View",
           url: "/main/overview/manager-view",
+          resource: "manager_view",
         },
       ],
     },
@@ -229,6 +231,7 @@ type NavItem = {
   items?: {
     title: string;
     url: string;
+    resource: string;
   }[];
 };
 
@@ -258,17 +261,35 @@ export const RadixSidebarDemo = ({
       permissions.includes("*") || permissions.includes(`${resource}.view`),
     [permissions],
   );
-  const operationsNav = React.useMemo(
-    () => DATA.navMain.filter((item) => canView(item.resource)),
+  const filterNav = React.useCallback(
+    (items: NavItem[]) =>
+      items.flatMap((item) => {
+        const visibleSubItems = item.items?.filter((subItem) =>
+          canView(subItem.resource),
+        );
+
+        if (item.items) {
+          if (!visibleSubItems?.length) return [];
+          return [
+            { ...item, url: visibleSubItems[0].url, items: visibleSubItems },
+          ];
+        }
+
+        return canView(item.resource) ? [item] : [];
+      }),
     [canView],
+  );
+  const operationsNav = React.useMemo(
+    () => filterNav(DATA.navMain),
+    [filterNav],
   );
   const billingNav = React.useMemo(
-    () => DATA.billingNavMain.filter((item) => canView(item.resource)),
-    [canView],
+    () => filterNav(DATA.billingNavMain),
+    [filterNav],
   );
   const adminNav = React.useMemo(
-    () => DATA.adminNavMain.filter((item) => canView(item.resource)),
-    [canView],
+    () => filterNav(DATA.adminNavMain),
+    [filterNav],
   );
   const availableWorkspaces = React.useMemo(
     () =>
@@ -305,13 +326,15 @@ export const RadixSidebarDemo = ({
   const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
   const subscriberSearchRef = React.useRef<HTMLInputElement>(null);
   const activeNavMain: NavItem[] =
-    activeWorkspace.plan === "Billing Management"
+    activeWorkspace?.plan === "Billing Management"
       ? billingNav
-      : activeWorkspace.plan === "Administrator"
+      : activeWorkspace?.plan === "Administrator"
         ? adminNav
-        : operationsNav;
+        : activeWorkspace?.plan === "Operations"
+          ? operationsNav
+          : [];
   const activeProjects =
-    activeWorkspace.plan === "Operations" && canView("service_requests")
+    activeWorkspace?.plan === "Operations" && canView("service_requests")
       ? serviceRequestCategories
       : [];
   const isSubscriberDetailsPage = pathname.startsWith("/main/subscribers/");
@@ -625,7 +648,7 @@ export const RadixSidebarDemo = ({
     const workspaceForPath = getWorkspaceForPath(pathname);
 
     setActiveWorkspace((currentWorkspace) =>
-      currentWorkspace.plan === workspaceForPath.plan
+      currentWorkspace?.plan === workspaceForPath?.plan
         ? currentWorkspace
         : workspaceForPath,
     );
@@ -728,7 +751,10 @@ export const RadixSidebarDemo = ({
                   {activeNavMain.map((item) => {
                     const isActive =
                       pathname === item.url ||
-                      (item.url === "/main/overview" &&
+                      item.items?.some((subItem) => pathname === subItem.url) ||
+                      (item.items?.some(
+                        (subItem) => subItem.url === "/main/overview",
+                      ) &&
                         pathname.startsWith("/main/overview"));
                     return item.items && item.items.length > 0 ? (
                       <Collapsible
@@ -951,8 +977,11 @@ export const RadixSidebarDemo = ({
 
         <SidebarInset className="min-w-0 overflow-x-hidden">
           {isDashboardPage && (
-            <header className="flex h-12 shrink-0 items-center px-3 md:hidden">
+            <header className="flex h-12 shrink-0 items-center gap-2 px-3 md:hidden">
               <SidebarTrigger className="-ml-1" />
+              <span className="text-sm font-semibold text-foreground">
+                Dashboard
+              </span>
             </header>
           )}
           {!isDashboardPage && (

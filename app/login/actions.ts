@@ -2,6 +2,10 @@
 
 import { redirect } from "next/navigation";
 
+import {
+  getCurrentMainPermissions,
+  getMainLandingPath,
+} from "@/lib/access-control";
 import { createClient } from "@/lib/supabase/server";
 
 export type LoginState = {
@@ -29,7 +33,8 @@ export async function login(
     return { error: error.message };
   }
 
-  redirect("/main/overview");
+  const permissions = await getCurrentMainPermissions();
+  redirect(getMainLandingPath(permissions));
 }
 
 export async function logout() {

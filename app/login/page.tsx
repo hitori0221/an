@@ -1,22 +1,27 @@
-import { LoginForm } from "@/components/login-form"
-import { createClient } from "@/lib/supabase/server"
-import { Fredoka } from "next/font/google"
-import Image from "next/image"
-import { redirect } from "next/navigation"
+import { LoginForm } from "@/components/login-form";
+import {
+  getCurrentMainPermissions,
+  getMainLandingPath,
+} from "@/lib/access-control";
+import { createClient } from "@/lib/supabase/server";
+import { Fredoka } from "next/font/google";
+import Image from "next/image";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
 const roundedBrand = Fredoka({
   subsets: ["latin"],
   weight: ["600", "700"],
-})
+});
 
 export default async function LoginPage() {
-  const supabase = await createClient()
-  const { data } = await supabase.auth.getClaims()
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
 
   if (data?.claims) {
-    redirect("/main/overview")
+    const permissions = await getCurrentMainPermissions();
+    redirect(getMainLandingPath(permissions));
   }
 
   return (
@@ -73,7 +78,9 @@ export default async function LoginPage() {
             className="h-auto w-[420px] dark:brightness-110"
           />
           <div className="mt-9 text-center">
-            <h2 className={`${roundedBrand.className} text-4xl font-bold tracking-wide`}>
+            <h2
+              className={`${roundedBrand.className} text-4xl font-bold tracking-wide`}
+            >
               <span
                 className="text-slate-950"
                 style={{
@@ -107,5 +114,5 @@ export default async function LoginPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
